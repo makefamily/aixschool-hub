@@ -12,7 +12,12 @@ AI 직원 24명(블로그·스레드·카드뉴스·영상·상세페이지·주
 2. Node.js 20 이상이 있는지 확인합니다. 없으면 사용자에게 nodejs.org에서 LTS를 설치해 달라고 안내하고 멈춥니다(관리자 권한이 필요해서 사용자가 직접 설치합니다).
 3. 설치 스크립트를 실행합니다.
    - 맥: `curl -fsSL https://raw.githubusercontent.com/makefamily/aixschool-hub/main/get-mac.sh | bash`
-   - 윈도우(PowerShell): `irm https://raw.githubusercontent.com/makefamily/aixschool-hub/main/get-windows.ps1 | iex`
+   - 윈도우(PowerShell): 아래 세 줄을 차례로 실행합니다. 받은 스크립트를 바로 실행하는 방식(`irm ... | iex`)은 Windows 보안이 악성으로 막으니 쓰지 않습니다.
+     ```
+     Invoke-WebRequest https://github.com/makefamily/aixschool-hub/releases/latest/download/AISchoolHub-windows.zip -OutFile "$env:TEMP\aischoolhub.zip" -UseBasicParsing
+     Expand-Archive "$env:TEMP\aischoolhub.zip" "$env:TEMP\aischoolhub" -Force
+     powershell -NoProfile -ExecutionPolicy Bypass -File "$env:TEMP\aischoolhub\AISchoolHub-install\install-windows.ps1"
+     ```
 4. 중간에 ChatGPT(Codex) 로그인 브라우저가 뜨면 사용자 본인 계정으로 로그인하도록 안내합니다. Codex 구독이 없으면 창을 닫아도 됩니다.
 5. 끝나면 'AI 학교 허브' 앱이 열립니다. 사용자에게 이름을 넣고 설정 › AI 로그인에서 Claude 또는 Codex가 "로그인됨"인지 확인하게 합니다.
 6. 마지막 줄에 "끝. 허브 폴더: ..."가 나오면 설치 완료입니다. 실패하면 마지막 20줄을 읽고 원인을 한 줄로 알려 주세요.
@@ -66,7 +71,7 @@ AI 직원 24명(블로그·스레드·카드뉴스·영상·상세페이지·주
 | `tools/` | 설치·스킬 깔기·키 금고·묶음 만들기 |
 | `desktop/` | 데스크톱 앱 껍데기(Tauri 2) |
 | `install/` | 맥·윈도우 설치 파일 |
-| `get-mac.sh`, `get-windows.ps1` | 최신 묶음을 받아 설치 파일을 실행하는 한 줄 설치 |
+| `get-mac.sh` | 맥에서 최신 묶음을 받아 설치 파일을 실행하는 한 줄 설치 |
 
 묶음 직접 만들기: 맥에서 `desktop/`의 Tauri 앱을 빌드한 뒤 `node tools/build-release.mjs`. 태그(`v*`)를 올리면 GitHub Actions가 맥·윈도우 묶음을 만들어 Releases에 올립니다.
 
