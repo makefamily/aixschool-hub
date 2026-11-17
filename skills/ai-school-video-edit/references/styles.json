@@ -1,0 +1,407 @@
+{
+ "schema_version": 1,
+ "note": "인물 낭독 숏폼 편집 스타일의 시작값 모음. 좌표는 0~1 비율, 글자 크기는 1080x1920 기준 px. 글꼴 이름은 후보이며 학생 PC에 있는 글꼴(Pretendard 또는 맥 Apple SD Gothic Neo, 윈도우 Malgun Gothic)로 바꿔 쓴다. 학생 요청이 이 값보다 우선한다.",
+ "series_headline": {
+  "text": null,
+  "duration_seconds": 2.0,
+  "note": "학생의 시리즈 고정 문구. 비어 있으면 영상마다 학생과 정한다. 남의 시리즈 문구를 쓰지 않는다."
+ },
+ "common_rules": {
+  "retakes": "버린 앞 시도·반복된 시작은 지우고 마지막으로 깔끔하게 끝낸 발화를 남긴다",
+  "person_preservation": "얼굴 모양, 입 모양 타이밍, 손, 목소리를 바꾸지 않는다. 배경과 조명 보정은 학생이 허락한 범위에서만",
+  "caption_overlap": "말 자막은 한 번에 하나만. 머리 위 제목과 말 자막은 다른 높이에 두고 글자 상자가 겹치지 않게",
+  "caption_emphasis": "핵심어는 빨강 등 글자 색으로만 강조하고 배경 상자(알약·칩)는 쓰지 않는다",
+  "camera_rhythm": "인물 화면의 확대·이동은 구절마다 다르게(짧은 확대, 천천히 밀기, 멈춤, 풀기). 일정한 간격으로 흔들지 않는다",
+  "dialogue_rhythm": "말 사이 빈틈을 줄이고 늘어진 말끝만 줄여 문장이 바로 이어지게 한다. 배속으로 대신하지 않는다(모든 구간 1.0배)",
+  "delivery": "MP4 + 고칠 수 있는 계획 파일 + 교정한 자막(SRT/ASS) + 쓴 자료 기록. 4K 납품은 1080x1920 기준본을 비율 유지로 키워 만들고 네이티브 4K 세부라고 말하지 않는다"
+ },
+ "default_style": "info-cards",
+ "styles": [
+  {
+   "id": "info-cards",
+   "name": "정보 카드 + 하단 인물",
+   "use_when": "AI 도구·실행 순서·검증된 비교 설명",
+   "parameter_status": "시작값(재현을 위한 출발점). 원본 편집기 설정값이 아님",
+   "canvas": [
+    1080,
+    1920
+   ],
+   "caption": {
+    "center": [
+     0.5,
+     0.5
+    ],
+    "font_candidate": "Pretendard-Bold",
+    "font_size_px": 58,
+    "fill": "#FFFFFF",
+    "stroke_px": 4,
+    "stroke": "#151515",
+    "max_lines": 1,
+    "warning": {
+     "center": [
+      0.5,
+      0.556
+     ],
+     "font_size_px": 82,
+     "fill": "#F21D20"
+    }
+   },
+   "header": {
+    "mode": "full-frame_4-line_cover_then_hard_cut_to_close-face-caption",
+    "cover_duration_seconds": 0.1,
+    "full_face_warning_seconds": [
+     1.47,
+     2.73
+    ],
+    "variant_rule": "변형마다 자기 타이밍을 쓴다. 한 변형의 시점을 다른 변형에 강제하지 않는다",
+    "cover": {
+     "duration_seconds": 0.1,
+     "main_headline_bbox_normalized": [
+      0.076389,
+      0.317188,
+      0.930556,
+      0.684375
+     ],
+     "main_headline_center_normalized": [
+      0.503472,
+      0.500781
+     ],
+     "authored_cover_bbox_normalized": [
+      0.063889,
+      0.154688,
+      0.930556,
+      0.684375
+     ],
+     "scope": "한 변형에만 해당. 화면에 보이는 글자 모양 기준이며 편집기 글꼴 설정값이 아님"
+    }
+   },
+   "assets": {
+    "layout": "upper card, lower rounded live plate, head overlaps boundary",
+    "upper_rect": [
+     0.06,
+     0.05,
+     0.88,
+     0.42
+    ],
+    "lower_plate_rect": [
+     0,
+     0.6,
+     1,
+     0.4
+    ],
+    "head_top_y": 0.53,
+    "kinds": [
+     "UI cards",
+     "charts",
+     "logos",
+     "step cards",
+     "cursor",
+     "actual screen recordings"
+    ]
+   },
+   "motion": {
+    "cut": "hard",
+    "card_transition_seconds": [
+     0.2,
+     0.35
+    ],
+    "stagger_seconds": [
+     0.08,
+     0.15
+    ],
+    "counter_seconds": [
+     0.8,
+     1.0
+    ],
+    "easing_candidate": "ease-out",
+    "notes": "Use timed sequence from chosen reference; no fixed random zoom timer"
+   },
+   "exact_font_family": null,
+   "exact_bgm": null,
+   "exact_sfx": null
+  },
+  {
+   "id": "proof-top",
+   "name": "상단 증거 삽입형",
+   "use_when": "한 가지 주장과 구체적인 예시를 빠르게 설명",
+   "parameter_status": "시작값(재현을 위한 출발점). 원본 편집기 설정값이 아님",
+   "canvas": [
+    1080,
+    1920
+   ],
+   "caption": {
+    "center": [
+     0.5,
+     0.58
+    ],
+    "font_candidate": "Pretendard-Bold",
+    "font_size_px": 38,
+    "fill": "#FFFFFF",
+    "stroke_px": 2,
+    "max_lines": 1,
+    "korean_adaptation": "2–4 어절 의미 단위, 영어 단어 개수 그대로 복제 금지"
+   },
+   "header": {
+    "mode": "oversized opener around face",
+    "center": [
+     0.5,
+     0.15
+    ],
+    "font_size_px": 96,
+    "duration_seconds": [
+     0,
+     1.8
+    ]
+   },
+   "assets": {
+    "layout": "locked centered person + full-width upper proof",
+    "proof_rect": [
+     0,
+     0,
+     1,
+     0.48
+    ],
+    "subject_rect": [
+     0.28,
+     0.28,
+     0.45,
+     0.69
+    ],
+    "kinds": [
+     "actual demo",
+     "before/after",
+     "proof screenshots"
+    ]
+   },
+   "motion": {
+    "cut": "hard",
+    "proof_hold_seconds": [
+     0.7,
+     1.5
+    ],
+    "burst_interval_seconds": [
+     0.75,
+     1.2
+    ],
+    "camera_zoom": "none unless supported by source",
+    "easing_candidate": null
+   },
+   "exact_font_family": null,
+   "exact_bgm": null,
+   "exact_sfx": null,
+   "required_intro_behavior": "Word accumulation at measured distinct positions; never substitute a static top headline. Use per-word target speech anchors and record temporal adaptation."
+  },
+  {
+   "id": "numbered-talk",
+   "name": "고정 제목 + 번호 목록형",
+   "use_when": "촬영본 한 개로 만드는 팁·오해·체크리스트",
+   "parameter_status": "시작값(재현을 위한 출발점). 원본 편집기 설정값이 아님",
+   "canvas": [
+    1080,
+    1920
+   ],
+   "caption": {
+    "center": [
+     0.5,
+     0.728
+    ],
+    "font_candidate": "Jua (substitute; original unidentified)",
+    "font_size_px": 47,
+    "fill": "#FFFFFF",
+    "stroke_px": 5,
+    "max_lines": 2,
+    "numbered": {
+     "center": [
+      0.5,
+      0.682
+     ],
+     "font_size_px": 56,
+     "fill": "#F21D20"
+    }
+   },
+   "header": {
+    "mode": "persistent 2-line hook",
+    "center": [
+     0.5,
+     0.2075
+    ],
+    "font_candidate": "Jua (candidate only; compare shapes)",
+    "font_size_px": 100,
+    "stroke_px": 9,
+    "max_lines": 2
+   },
+   "assets": {
+    "layout": "single real room and centered person",
+    "subject_eye_y": [
+     0.4,
+     0.46
+    ],
+    "kinds": [],
+    "required_broll": false
+   },
+   "motion": {
+    "cut": "hard dialogue jump cuts",
+    "caption_transition_seconds": 0,
+    "camera_zoom": "none",
+    "easing_candidate": null
+   },
+   "exact_font_family": null,
+   "exact_bgm": null,
+   "exact_sfx": null
+  },
+  {
+   "id": "classroom-proof",
+   "name": "강의실 + 자료 시연형",
+   "use_when": "커리큘럼·수업 방식·실제 결과물 설명",
+   "parameter_status": "시작값(재현을 위한 출발점). 원본 편집기 설정값이 아님",
+   "canvas": [
+    1080,
+    1920
+   ],
+   "caption": {
+    "center": [
+     0.5,
+     0.52
+    ],
+    "font_candidate": "Pretendard-Bold",
+    "font_size_px": 48,
+    "fill": "#FFFFFF",
+    "stroke_px": 5,
+    "max_lines": 1,
+    "semantic_accents": [
+     "#C8ED42",
+     "#FF3F62"
+    ]
+   },
+   "header": {
+    "mode": "persistent premise pill + blue headline",
+    "pill_center": [
+     0.5,
+     0.05
+    ],
+    "pill_font_size_px": 29,
+    "pill_fill": "#000000",
+    "center": [
+     0.5,
+     0.08
+    ],
+    "font_size_px": 60,
+    "fill": "#43B7ED"
+   },
+   "assets": {
+    "layout": "classroom plate with large centered rectangular proof",
+    "proof_rect": [
+     0.06,
+     0.2,
+     0.88,
+     0.58
+    ],
+    "small_card_rect": [
+     0.37,
+     0.5,
+     0.29,
+     0.14
+    ],
+    "cta_center": [
+     0.5,
+     0.725
+    ],
+    "kinds": [
+     "board detail",
+     "actual screenshot",
+     "curriculum",
+     "output demo"
+    ]
+   },
+   "motion": {
+    "cut": "mostly hard; document entrance near 24–25s may fade briefly",
+    "caption_transition_seconds": 0,
+    "proof_refresh_seconds": [
+     3,
+     6
+    ],
+    "camera_zoom": "cut to details, not animated zoom",
+    "easing_candidate": null,
+    "document_fade_seconds_candidate": [
+     0.2,
+     0.5
+    ]
+   },
+   "exact_font_family": null,
+   "exact_bgm": null,
+   "exact_sfx": null
+  },
+  {
+   "id": "build-diary",
+   "name": "제작일지 몽타주형",
+   "use_when": "과정·하루·전환점 이야기; 원본 인물+과정 애셋 필요",
+   "parameter_status": "시작값(재현을 위한 출발점). 원본 편집기 설정값이 아님",
+   "canvas": [
+    1080,
+    1920
+   ],
+   "caption": {
+    "center": [
+     0.5,
+     0.74
+    ],
+    "font_candidate": "Pretendard-Regular",
+    "font_size_px": 34,
+    "fill": "#FFFFFF",
+    "stroke_px": 1,
+    "max_lines": 2,
+    "english": false
+   },
+   "header": {
+    "mode": "rough handwritten title art around face",
+    "rect": [
+     0.08,
+     0.08,
+     0.84,
+     0.49
+    ],
+    "font_candidate": "EastSeaDokdo (candidate only)",
+    "font_size_px": [
+     90,
+     158
+    ]
+   },
+   "assets": {
+    "layout": "face/detail/place alternating montage",
+    "kinds": [
+     "founder footage",
+     "desk/hands",
+     "screen recording",
+     "preparation",
+     "location"
+    ],
+    "requires_additional_assets": true,
+    "ai_visuals": "illustrative scenes only; do not fabricate attendance or actual outcomes"
+   },
+   "motion": {
+    "cut": "hard",
+    "montage_shot_seconds": [
+     0.7,
+     2.0
+    ],
+    "reflective_shot_seconds": [
+     2,
+     4.5
+    ],
+    "chapter_card_seconds": [
+     1,
+     1.6
+    ],
+    "chapter_position": "logical pivot, not a fixed timestamp",
+    "push_in_candidate": [
+     1,
+     1.03
+    ],
+    "easing_candidate": null
+   },
+   "exact_font_family": null,
+   "exact_bgm": null,
+   "exact_sfx": null
+  }
+ ]
+}

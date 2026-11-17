@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "layout": {
+    "width": 1080,
+    "height": 1920,
+    "fps": 30
+  },
+  "export": {
+    "resolution": "portrait-4k",
+    "width": 2160,
+    "height": 3840,
+    "quality": "high",
+    "format": "mp4"
+  },
+  "caption_style": {
+    "center_y": 0.446,
+    "font_size": 64,
+    "text_shadow": "0 3px 3px #000, 0 5px 10px rgba(0,0,0,.95), 0 0 3px #000"
+  },
+  "headline_style": {
+    "design": "impact",
+    "font_size": 108,
+    "last_line_font_size": 108,
+    "duration": 1
+  },
+  "reference": {
+    "note": "참고 영상의 관찰값(길이·컷 수)은 시작 추정치일 뿐이며 새 작업에 고정하지 않는다",
+    "median_cut_seconds": 1.8
+  },
+  "distinction": "관찰값과 제작 기본값(자막 모양, 4K 출력)은 다르다. 이 파일은 제작 기본값이며 작업의 edit-plan.json 값이 우선한다."
+}

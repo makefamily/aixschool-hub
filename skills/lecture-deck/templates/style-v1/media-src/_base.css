@@ -1,0 +1,8 @@
+/* 미디어 조판 공통 — 덱 paper 팔레트와 같은 색 */
+:root{--bg:#F7F4EC;--bg1:#EFEBE0;--bg2:#E7E1D3;--ink:#131313;--body:#43423E;--mute:#7A766C;
+  --faint:#BDB6A6;--line:rgba(19,19,19,.12);--acc:#0047AB;
+  --font:"Pretendard","Apple SD Gothic Neo",sans-serif;--mono:ui-monospace,"SF Mono",Menlo,monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:transparent;font-family:var(--font);color:var(--ink);
+  -webkit-font-smoothing:antialiased;word-break:keep-all}
+#page{background:#fff;overflow:hidden}

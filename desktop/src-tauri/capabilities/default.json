@@ -1,0 +1,22 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "hub",
+  "description": "허브 화면(127.0.0.1:7710)에서 내장 브라우저만 쓸 수 있게",
+  "windows": [
+    "main"
+  ],
+  "remote": {
+    "urls": [
+      "http://127.0.0.1:7710/*",
+      "http://localhost:7710/*"
+    ]
+  },
+  "permissions": [
+    "core:default",
+    "allow-browser-show",
+    "allow-browser-hide",
+    "allow-browser-go",
+    "allow-browser-url",
+    "allow-browser-eval"
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "note": "연결 목록. 키 값은 여기 넣지 않는다(각자 PC 금고). steps는 학생 화면에 그대로 보인다.",
+  "connections": [
+    {
+      "id": "threads",
+      "name": "Threads",
+      "staff": "SNS 마케터",
+      "what": "스레드에 글을 실제로 올려요",
+      "keys": [
+        {
+          "name": "THREADS_ACCESS_TOKEN",
+          "label": "Threads 토큰"
+        }
+      ],
+      "steps": [
+        "메타 개발자 사이트(developers.facebook.com)에 로그인하고 '앱 만들기'를 눌러요",
+        "사용 사례에서 'Threads API 사용'을 골라요",
+        "권한에 threads_basic, threads_content_publish 를 넣어요",
+        "내 스레드 계정을 테스터로 추가하고 수락해요",
+        "토큰 만들기를 눌러 나온 긴 글자를 아래 칸에 붙여 넣어요"
+      ],
+      "doc": "https://developers.facebook.com/docs/threads/get-started",
+      "check": "sns-writer"
+    },
+    {
+      "id": "youtube",
+      "name": "유튜브",
+      "staff": "유튜브 채널 관리자, 숏폼 영상편집자",
+      "what": "영상을 내 채널에 올리고 제목·설명을 넣어요",
+      "keys": [
+        {
+          "name": "YOUTUBE_CLIENT_ID",
+          "label": "클라이언트 ID"
+        },
+        {
+          "name": "YOUTUBE_CLIENT_SECRET",
+          "label": "클라이언트 비밀번호"
+        }
+      ],
+      "steps": [
+        "구글 클라우드 콘솔(console.cloud.google.com)에서 새 프로젝트를 만들어요",
+        "YouTube Data API v3 를 사용 설정해요",
+        "OAuth 동의 화면을 '외부'로 만들고 내 구글 계정을 테스트 사용자로 넣어요",
+        "사용자 인증 정보 › OAuth 클라이언트 ID(데스크톱 앱)를 만들어요",
+        "나온 ID와 비밀번호를 아래 칸에 넣어요. 처음 올릴 때 브라우저에서 한 번 허락하면 돼요"
+      ],
+      "doc": "https://developers.google.com/youtube/v3/guides/uploading_a_video"
+    },
+    {
+      "id": "notion",
+      "name": "노션",
+      "staff": "비서, 운영 매니저",
+      "what": "할 일·일정·정리를 내 노션 페이지에 넣어요",
+      "keys": [
+        {
+          "name": "NOTION_TOKEN",
+          "label": "노션 통합 토큰"
+        }
+      ],
+      "steps": [
+        "노션 통합 페이지(notion.so/my-integrations)에서 '새 통합'을 만들어요",
+        "나온 토큰을 아래 칸에 넣어요",
+        "AI가 쓸 노션 페이지에서 오른쪽 위 ... › 연결 › 방금 만든 통합을 추가해요"
+      ],
+      "doc": "https://developers.notion.com/docs/create-a-notion-integration"
+    },
+    {
+      "id": "naver",
+      "name": "네이버 블로그",
+      "staff": "블로그 마케터",
+      "what": "Aside로 블로그 편집창을 열어 글·꾸미기·사진을 넣고 임시저장해요(발행 버튼은 직접)",
+      "keys": [],
+      "steps": [
+        "Aside 브라우저를 설치하고 가입해요(aside.com/download). 없으면 AI가 크롬·엣지로 대신해요",
+        "Aside 창에서 내 네이버 계정으로 직접 로그인해요",
+        "네이버는 자동 게시를 약관으로 막고 있어서, 임시저장된 글을 확인하고 발행은 내가 눌러요"
+      ],
+      "doc": "https://policy.naver.com/policy/service.html"
+    }
+  ]
+}

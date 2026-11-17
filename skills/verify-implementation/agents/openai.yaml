@@ -1,0 +1,7 @@
+interface:
+  display_name: "Verify Implementation"
+  short_description: "Run tests and checks before closeout"
+  default_prompt: "Use $verify-implementation to run the right checks for this change and summarize the evidence."
+
+policy:
+  allow_implicit_invocation: false

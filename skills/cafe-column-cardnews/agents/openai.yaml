@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cafe Column Cardnews"
+  short_description: "Make 10-card news from Cafe columns."
+  default_prompt: "Convert this Naver Cafe column into a 10-card cardnews draft with a hook, practical body cards, CTA, design notes, and image suggestions."

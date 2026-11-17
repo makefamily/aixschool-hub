@@ -1,0 +1,52 @@
+# 태그(v*)를 올리면 맥·윈도우 설치 묶음을 만들어 GitHub Releases에 올린다.
+name: release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  windows-app:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: desktop/src-tauri }
+      - name: build
+        working-directory: desktop
+        run: npx -y @tauri-apps/cli@2 build --bundles nsis
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-app
+          path: desktop/src-tauri/target/release/bundle/nsis/*.exe
+  bundles:
+    needs: windows-app
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: desktop/src-tauri }
+      - name: mac app (애플 칩·인텔 모두)
+        working-directory: desktop
+        run: |
+          rustup target add x86_64-apple-darwin aarch64-apple-darwin
+          npx -y @tauri-apps/cli@2 build --bundles app --target universal-apple-darwin
+          mkdir -p src-tauri/target/release/bundle/macos
+          ditto "src-tauri/target/universal-apple-darwin/release/bundle/macos/AI 학교 허브.app" "src-tauri/target/release/bundle/macos/AI 학교 허브.app"
+      - uses: actions/download-artifact@v4
+        with: { name: windows-app, path: build/windows-app }
+      - name: bundles
+        run: node tools/build-release.mjs mac windows
+      - name: upload
+        if: startsWith(github.ref, 'refs/tags/')
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes "맥: AISchoolHub-mac.zip · 윈도우: AISchoolHub-windows.zip. 설치 방법은 README를 보세요."
+          gh release upload "$GITHUB_REF_NAME" release/AISchoolHub-mac.zip release/AISchoolHub-windows.zip --clobber

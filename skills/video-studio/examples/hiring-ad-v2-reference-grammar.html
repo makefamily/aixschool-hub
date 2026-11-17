@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>AI 직원 채용 공고 v2 (레퍼런스 문법)</title>
+<style>html,body{margin:0;background:#000;display:grid;place-items:center;height:100vh}canvas{width:min(100vw,177.8vh);height:auto}</style>
+</head><body><canvas id="c" width="1920" height="1080"></canvas>
+<script>
+// 계약: draw(frame)은 frame의 순수 함수. Math.random/Date 금지. 난수는 이름 시드.
+const W=1920,H=1080,FPS=60,DUR=15,FRAMES=FPS*DUR;
+const cv=document.getElementById('c'), out=cv.getContext('2d');
+const buf=document.createElement('canvas'); buf.width=W; buf.height=H; const ctx=buf.getContext('2d');
+const lay=document.createElement('canvas'); lay.width=W; lay.height=H; const lc=lay.getContext('2d');
+
+// ── 스타일 바이블 (5색 + 3단 타이포)
+const INK='#0E0F12', IVORY='#F2EEE6', COBALT='#1F4FD8', ELEC='#2B50FF', LIME='#D6F23B', WHITE='#FFFFFF';
+const SANS=(w,s)=>`${w} ${s}px Pretendard, "Apple SD Gothic Neo", sans-serif`;
+const SERIF=(s)=>`italic 400 ${s}px Georgia, "Times New Roman", serif`;
+const MONO=(s)=>`500 ${s}px "SF Mono", Menlo, monospace`;
+
+// ── 단일 타이밍 정본 (120BPM)
+const B=0.5;
+const S={mark:0, word:1.9, chart:3.5, morph:5.6, brk:7.5, cloud:9.0, slam:10.75, end:12.5};
+const CONDS=['24시간 근무','주말 출근','같은 질문 100번','퇴근 없음'];
+const EASES=['linear','ease-in-out','expo-out','back-out'];
+const TASKS=[{n:'메일 답장',s:'mail'},{n:'견적 비교',s:'table'},{n:'일정 정리',s:'cal'},{n:'고객 응대',s:'bubble'}];
+const SLAMS=[{t:10.75,txt:'AI',bg:COBALT,fg:WHITE},{t:11.0,txt:'직원',bg:IVORY,fg:INK,dot:COBALT},{t:11.25,txt:'24/7',bg:INK,fg:WHITE,dot:LIME},
+             {t:11.5,txt:'지치지 않고',bg:LIME,fg:INK,marquee:true},{t:11.875,txt:'사장님 방식대로',bg:INK,fg:WHITE,dot:LIME}];
+const CUES=[0,S.word,S.chart,S.morph,6.0,6.5,7.0,S.brk,8.25,8.6,S.cloud,10.75,11.0,11.25,11.5,11.875,S.end];
+
+// ── 수학
+const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x)), lerp=(a,b,t)=>a+(b-a)*t, prog=(t,a,b)=>clamp((t-a)/(b-a));
+const eOut=t=>1-Math.pow(1-clamp(t),4), eIn=t=>Math.pow(clamp(t),3), eIO=t=>{t=clamp(t);return t<.5?8*t**4:1-Math.pow(-2*t+2,4)/2;};
+const expoOut=t=>{t=clamp(t);return t>=1?1:1-Math.pow(2,-10*t);};
+const backOut=(t,c=2.2)=>{t=clamp(t);return 1+(c+1)*Math.pow(t-1,3)+c*Math.pow(t-1,2);};
+function spring(t,k=16,z=.42){ if(t<=0) return 0; return 1-Math.exp(-z*k*t)*Math.cos(k*Math.sqrt(1-z*z)*t); }
+function hash(s){let h=2166136261;for(const c of s){h^=c.charCodeAt(0);h=Math.imul(h,16777619);}return h>>>0;}
+function rngFor(k){let a=hash(k);return()=>{a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+const hitk=(t,at,d=.3)=>{const u=(t-at)/d;return u<0||u>1?0:Math.pow(1-u,3);};
+const EASEF={linear:t=>clamp(t),'ease-in-out':eIO,'expo-out':expoOut,'back-out':t=>backOut(t)};
+
+// ── 공통 그리기
+function txt(c,s,x,y,font,col,align='left',base='alphabetic',ls=0){c.save();c.font=font;c.fillStyle=col;c.textAlign=align;c.textBaseline=base;c.letterSpacing=ls+'px';c.fillText(s,x,y);c.restore();}
+function bg(col){ctx.fillStyle=col;ctx.fillRect(0,0,W,H);}
+function hud(t,dark){
+  const c=dark?'rgba(255,255,255,.5)':'rgba(14,15,18,.5)';
+  txt(ctx,'MF — HIRING / No.001',64,58,MONO(17),c); txt(ctx,'AI EMPLOYEE · FULL TIME',W-64,58,MONO(17),c,'right');
+  const f=Math.floor(t*FPS); const tc=`00:00:${String(Math.floor(t)).padStart(2,'0')}:${String(f%FPS).padStart(2,'0')}`;
+  txt(ctx,tc,64,H-44,MONO(17),c); txt(ctx,'15s · 60fps · BRAND',W-64,H-44,MONO(17),c,'right');
+  ctx.strokeStyle=c; ctx.lineWidth=1.5; const L=18;
+  [[40,40,1,1],[W-40,40,-1,1],[40,H-40,1,-1],[W-40,H-40,-1,-1]].forEach(([x,y,sx,sy])=>{ctx.beginPath();ctx.moveTo(x,y+sy*L);ctx.lineTo(x,y);ctx.lineTo(x+sx*L,y);ctx.stroke();});
+  ctx.fillStyle=dark?'rgba(255,255,255,.18)':'rgba(14,15,18,.14)'; ctx.fillRect(64,H-30,W-128,1.5);
+  ctx.fillStyle=dark?LIME:COBALT; ctx.fillRect(64,H-30,(W-128)*t/DUR,1.5);
+}
+function check(c,x,y,s,col,k=1,lw){ // 체크 스트로크(0~1 드로우)
+  c.save(); c.strokeStyle=col; c.lineWidth=lw||s*.16; c.lineCap='round'; c.lineJoin='round'; c.beginPath();
+  const p=[[x-s*.32,y+s*.02],[x-s*.08,y+s*.26],[x+s*.36,y-s*.24]];
+  const a=clamp(k*2), b=clamp(k*2-1); c.moveTo(...p[0]); c.lineTo(lerp(p[0][0],p[1][0],a),lerp(p[0][1],p[1][1],a));
+  if(b>0) c.lineTo(lerp(p[1][0],p[2][0],b),lerp(p[1][1],p[2][1],b)); c.stroke(); c.restore();
+}
+
+// ── S0 0~1.9: 점 → 체크 배지 + 원형 글자 → 파랑 아이리스
+function sMark(t){
+  bg(INK);
+  const cx=W/2, cy=H/2;
+  const grow=spring(t-.12,14,.4);
+  ctx.save(); ctx.translate(cx,cy);
+  // 동심 링 2개 (지연 드로우)
+  [[330,.25],[470,.4]].forEach(([r,d])=>{const k=eOut(prog(t,d,d+.6)); ctx.strokeStyle='rgba(255,255,255,.14)'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(0,0,r,-Math.PI/2,-Math.PI/2+Math.PI*2*k); ctx.stroke();});
+  // 원형 글자 회전
+  const ring='HIRING · 채용 · FULL TIME · 24/7 · AI EMPLOYEE · ';
+  const ka=clamp(prog(t,.5,.8)); ctx.save(); ctx.rotate(t*.9); ctx.font=MONO(24); ctx.fillStyle=`rgba(255,255,255,${.7*ka})`; ctx.textAlign='center';
+  [...ring].forEach((ch,i)=>{ctx.save();ctx.rotate(i/ring.length*Math.PI*2);ctx.fillText(ch,0,-280);ctx.restore();}); ctx.restore();
+  // 코어: 점 → 둥근 사각 배지 + 체크
+  const shrink=eIn(prog(t,1.45,1.7));
+  const size=lerp(24,230,clamp(grow))*(1-shrink*.85);
+  const rad=lerp(size/2,size*.24,eOut(prog(t,.45,.8)));
+  ctx.rotate((1-eOut(prog(t,.3,.9)))*-1.2);
+  ctx.fillStyle=COBALT; ctx.beginPath(); ctx.roundRect(-size/2,-size/2,size,size,rad); ctx.fill();
+  if(t>.7) check(ctx,0,0,size*.9,WHITE,eOut(prog(t,.7,1.05)));
+  ctx.restore();
+  // 방사 스파크(오버슈트 순간)
+  const r=rngFor('spark'); for(let i=0;i<24;i++){const a=i/24*Math.PI*2+r()*.1,u=prog(t,.55,1.05); if(u<=0||u>=1) continue; const d0=150+eOut(u)*220, d1=d0+40*(1-u);
+    ctx.strokeStyle=`rgba(214,242,59,${1-u})`; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(cx+Math.cos(a)*d0,cy+Math.sin(a)*d0); ctx.lineTo(cx+Math.cos(a)*d1,cy+Math.sin(a)*d1); ctx.stroke();}
+  // 아이리스: 파랑 원이 퍼지며 다음 장면으로
+  const ir=eIn(prog(t,1.62,1.9))*1300; if(ir>0){ ctx.fillStyle=COBALT; ctx.beginPath(); ctx.arc(cx,cy,ir,0,7); ctx.fill(); }
+  hud(t,true);
+}
+
+// ── S1 1.9~3.5: "직원 구합니다." 글자별 상승 + 폭 변형 → 글자가 점으로
+const WORD=['직','원',' ','구','합','니','다','.'];
+function wordLayout(){ ctx.save(); ctx.font=SANS(900,230); ctx.letterSpacing='-6px'; const ws=WORD.map(c=>ctx.measureText(c).width); ctx.restore();
+  const total=ws.reduce((a,b)=>a+b,0); let x=W/2-total/2; return WORD.map((c,i)=>{const o={c,x:x+ws[i]/2,w:ws[i]}; x+=ws[i]; return o;}); }
+function railY(i){ return 330+i*150; }
+function sWord(t){
+  bg(COBALT); const lt=t-S.word; const L=wordLayout(); const by=H/2+80;
+  const squash=lerp(.78,1.1,eOut(prog(t,2.0,2.6)))*lerp(1,.94,eIO(prog(t,2.7,3.1)));   // 폭 애니메이션
+  L.forEach((g,i)=>{ if(g.c===' ') return;
+    const at=S.word+.04+i*.045, k=spring(t-at,18,.45);
+    const toDot=eIO(prog(t,3.05+i*.02,3.3+i*.02));           // 퇴장: 글자 → 점
+    const y=by+(1-clamp(k))*260;
+    ctx.save(); ctx.translate(W/2+(g.x-W/2)*squash, y-80); ctx.globalAlpha=clamp(k*3);
+    if(toDot<1){ ctx.save(); ctx.scale(squash*(1-toDot*.9),1-toDot*.9); txt(ctx,g.c,0,80,SANS(900,230),g.c==='.'?LIME:WHITE,'center','alphabetic',-6); ctx.restore(); }
+    if(toDot>.6){ ctx.fillStyle=g.c==='.'?LIME:WHITE; ctx.beginPath(); ctx.arc(0,0,lerp(4,14,prog(toDot,.6,1)),0,7); ctx.fill(); }
+    ctx.restore(); });
+  const ks=eOut(prog(t,2.35,2.75)); ctx.save(); ctx.globalAlpha=ks*(1-prog(t,3.05,3.25));
+  txt(ctx,'Now hiring — no experience required.',W/2,by+150+(1-ks)*20,SERIF(46),'rgba(255,255,255,.85)','center'); ctx.restore();
+  ctx.fillStyle='rgba(255,255,255,.35)'; ctx.fillRect(W/2-lerp(0,700,eOut(prog(t,2.2,2.8))),by-300,lerp(0,1400,eOut(prog(t,2.2,2.8))),1.5);
+  hud(t,true);
+}
+// 점 이동: S1 퇴장 점 → S2 레일 시작점 (매치 컷)
+function dotsTravel(t){
+  const L=wordLayout().filter(g=>g.c!==' ').slice(0,4);
+  L.forEach((g,i)=>{ const k=eIO(prog(t,3.3,3.62)); const x=lerp(g.x,420,k), y=lerp(H/2,railY(i),k);
+    ctx.fillStyle=i%2?COBALT:INK; ctx.beginPath(); ctx.arc(x,y,14,0,7); ctx.fill(); });
+}
+// ── S2 3.5~5.6: 지원 조건 에디토리얼 차트 (레일 경주)
+function sChart(t){
+  bg(IVORY);
+  const kin=eOut(prog(t,3.5,3.8));
+  txt(ctx,'Requirements.',120,200,SERIF(80),INK); txt(ctx,'지원 조건 — 4개 모두 충족 시 합격',124,262,SANS(600,26),'rgba(14,15,18,.55)');
+  CONDS.forEach((c,i)=>{ const y=railY(i);
+    ctx.globalAlpha=kin; txt(ctx,String(i+1).padStart(2,'0'),120,y+10,MONO(22),'rgba(14,15,18,.45)');
+    txt(ctx,c,175,y+16,SANS(800,54),INK); txt(ctx,EASES[i],1560,y-24,MONO(16),'rgba(14,15,18,.4)','right');
+    ctx.fillStyle='rgba(14,15,18,.18)'; ctx.fillRect(560,y-1.5,1000,3); ctx.globalAlpha=1;
+    const st=3.72+i*.1, k=EASEF[EASES[i]](prog(t,st,st+.9));
+    // 잔상(에코)
+    for(let e=3;e>=0;e--){ const ke=EASEF[EASES[i]](prog(t-e*.035,st,st+.9)); ctx.fillStyle=i%2?`rgba(0,71,171,${e?0.12:1})`:`rgba(14,15,18,${e?0.12:1})`;
+      ctx.beginPath(); ctx.ellipse(lerp(560,1560,ke),y,14+(e?0:6*Math.abs(k-ke)*40),14,0,0,7); ctx.fill(); }
+    const ok=eOut(prog(t,st+.9,st+1.08)); if(ok>0){ ctx.save(); ctx.globalAlpha=ok; ctx.fillStyle=COBALT; ctx.beginPath(); ctx.roundRect(1600,y-26,110,52,26); ctx.fill();
+      txt(ctx,'OK',1668,y+10,SANS(900,28),WHITE,'center'); check(ctx,1628,y,34,WHITE,ok,5); ctx.restore(); }
+  });
+  // 퇴장: 점 4개 → 가운데 타원 하나 → 파랑 배경으로 (매치 컷)
+  const g=eIO(prog(t,5.2,5.45)); if(g>0){ ctx.fillStyle=`rgba(242,238,230,${g*.9})`; ctx.fillRect(0,0,W,H);
+    const r=lerp(14,60,g); ctx.fillStyle=COBALT; ctx.beginPath(); ctx.ellipse(lerp(1560,W/2,g),lerp(railY(1.5),H/2,g),r*1.6,r,0,0,7); ctx.fill(); }
+  const ex=eIn(prog(t,5.42,5.6))*1400; if(ex>0){ ctx.fillStyle=COBALT; ctx.beginPath(); ctx.ellipse(W/2,H/2,ex*1.3,ex,0,0,7); ctx.fill(); }
+  hud(t,false);
+}
+// ── S3 5.6~7.5: 도형 모핑 (메일→견적표→달력→말풍선) + 위성 12개가 체크로
+function shapePts(kind,n=160){
+  const pts=[]; const R=170;
+  const rect=(w,h,r)=>{ for(let i=0;i<n;i++){ const a=i/n*Math.PI*2; let x=Math.cos(a),y=Math.sin(a); const m=Math.max(Math.abs(x)/w,Math.abs(y)/h); x/=m;y/=m;
+      const cx=Math.sign(x)*Math.max(0,Math.abs(x)-(w-r)), cy=Math.sign(y)*Math.max(0,Math.abs(y)-(h-r)); if(cx&&cy){const d=Math.hypot(cx,cy); x-=cx-cx/d*r*Math.min(1,d/r)*0; }
+      pts.push([x*R,y*R]); } };
+  if(kind==='circle') for(let i=0;i<n;i++){const a=i/n*Math.PI*2; pts.push([Math.cos(a)*R*.85,Math.sin(a)*R*.85]);}
+  else if(kind==='mail') rect(1.25,.82,.1);
+  else if(kind==='table') rect(1.1,1.0,.12);
+  else if(kind==='cal') rect(1.0,1.05,.2);
+  else if(kind==='bubble'){ for(let i=0;i<n;i++){const a=i/n*Math.PI*2; let x=Math.cos(a)*1.2,y=Math.sin(a)*.85; if(a>1.9&&a<2.25){x=-.55;y=1.25;} pts.push([x*R,y*R]);} }
+  else if(kind==='square') rect(.35,.35,.02);
+  return pts;
+}
+const SHAPES=['circle','mail','table','cal','bubble','square'];
+const SH_T=[5.6,6.0,6.5,7.0,7.25,7.42];
+function sMorph(t){
+  bg(COBALT);
+  let i=0; while(i<SH_T.length-2&&t>=SH_T[i+1]) i++;
+  const a=shapePts(SHAPES[i]), b=shapePts(SHAPES[i+1]); const k=clamp(spring(t-SH_T[i+1]+.18,20,.45));
+  const cx=W/2, cy=H/2-20;
+  ctx.save(); ctx.translate(cx,cy); ctx.rotate(Math.sin(t*2)*.03);
+  ctx.fillStyle=IVORY; ctx.beginPath(); a.forEach((p,j)=>{const q=b[j]; const x=lerp(p[0],q[0],t>=SH_T[i+1]-.18?k:0), y=lerp(p[1],q[1],t>=SH_T[i+1]-.18?k:0); j?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.closePath(); ctx.fill();
+  // 내부 디테일(모양 확정 후 페이드)
+  const cur=SHAPES[t>=SH_T[i+1]?i+1:i], dk=eOut(prog(t,SH_T[Math.min(i+1,SH_T.length-1)],SH_T[Math.min(i+1,SH_T.length-1)]+.15));
+  ctx.globalAlpha=t>=SH_T[i+1]?dk:1; ctx.strokeStyle=COBALT; ctx.lineWidth=10; ctx.lineCap='round';
+  if(cur==='mail'){ctx.beginPath();ctx.moveTo(-190,-120);ctx.lineTo(0,20);ctx.lineTo(190,-120);ctx.stroke();}
+  if(cur==='table'){for(let r=0;r<3;r++){ctx.beginPath();ctx.moveTo(-160,-70+r*70);ctx.lineTo(160,-70+r*70);ctx.stroke();} ctx.beginPath();ctx.moveTo(-40,-150);ctx.lineTo(-40,150);ctx.stroke();}
+  if(cur==='cal'){ctx.beginPath();ctx.moveTo(-160,-90);ctx.lineTo(160,-90);ctx.stroke(); [-80,80].forEach(x=>{ctx.beginPath();ctx.moveTo(x,-200);ctx.lineTo(x,-150);ctx.stroke();}); check(ctx,0,40,150,COBALT,1,14);}
+  if(cur==='bubble'){[-70,0,70].forEach(x=>{ctx.fillStyle=COBALT;ctx.beginPath();ctx.arc(x,0,16,0,7);ctx.fill();});}
+  ctx.restore();
+  // 라벨: 모양이 바뀔 때 블러 스왑
+  const tk=Math.max(0,Math.min(3,i-(t>=SH_T[i+1]?0:1)+(t>=SH_T[i+1]?0:0)));
+  const li=t<6.0?-1:Math.min(3,[6.0,6.5,7.0,7.25].filter(x=>t>=x).length-1);
+  if(li>=0&&t<7.42){ const lt=t-[6.0,6.5,7.0,7.25][li], lk=eOut(prog(lt,0,.18)); ctx.save(); ctx.globalAlpha=lk; ctx.filter=`blur(${(1-lk)*8}px)`;
+    txt(ctx,TASKS[li].n,cx,cy+300,SANS(800,56),WHITE,'center'); ctx.restore(); ctx.filter='none'; }
+  // 위성 12개: 공전, 박자마다 하나씩 체크
+  for(let s=0;s<12;s++){ const a=s/12*Math.PI*2+t*.7, rr=330; const x=cx+Math.cos(a)*rr, y=cy+Math.sin(a)*rr*.62;
+    const dt=5.9+s*.125, d=eOut(prog(t,dt,dt+.12)); const inK=spring(t-5.62-s*.02,18,.5);
+    ctx.save(); ctx.translate(x,y); ctx.scale(clamp(inK),clamp(inK));
+    ctx.fillStyle=d>.5?LIME:'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.arc(0,0,lerp(9,22,d),0,7); ctx.fill(); if(d>0) check(ctx,0,0,26,INK,d,4); ctx.restore(); }
+  const n=[...Array(12)].filter((_,s)=>t>=5.9+s*.125+.06).length;
+  txt(ctx,'처리 완료',120,190,SANS(600,26),'rgba(255,255,255,.65)'); txt(ctx,String(n).padStart(2,'0'),120,330,SANS(900,150),WHITE,'left','alphabetic',-6);
+  txt(ctx,'/ 12',330,330,SANS(700,48),'rgba(255,255,255,.4)'); txt(ctx,'Every task, done.',W-120,190,SERIF(44),'rgba(255,255,255,.85)','right');
+  hud(t,true);
+}
+// ── S4 7.5~9.0: 사각 타일 → 패턴 번짐 + 물결 → 암전 → 근데, / 사람은 아닙니다.
+function sBreak(t){
+  bg(INK); const cx=W/2, cy=H/2, T=60;
+  if(t<8.25){
+    const r=rngFor('truchet'); const spread=eOut(prog(t,7.5,7.95))*1300; const wave=(t-7.72)*2200;
+    for(let gy=0;gy<H/T+1;gy++) for(let gx=0;gx<W/T+1;gx++){ const x=gx*T, y=gy*T, o=r()<.5, d=Math.hypot(x+T/2-cx,y+T/2-cy); if(d>spread) continue;
+      const wv=Math.exp(-Math.pow((d-wave)/140,2)); ctx.strokeStyle=wv>.2?`rgba(214,242,59,${.5+wv*.5})`:'rgba(242,238,230,.9)'; ctx.lineWidth=7+wv*4;
+      ctx.beginPath(); if(o){ctx.arc(x,y,T/2,0,Math.PI/2);ctx.moveTo(x+T,y+T/2);ctx.arc(x+T,y+T,T/2,-Math.PI/2,-Math.PI,true);} else {ctx.arc(x+T,y,T/2,Math.PI/2,Math.PI);ctx.moveTo(x+T/2,y+T);ctx.arc(x,y+T,T/2,-Math.PI/2,0);} ctx.stroke(); }
+    const sq=1-eOut(prog(t,7.5,7.7)); if(sq>0){ ctx.fillStyle=IVORY; ctx.fillRect(cx-60*sq,cy-60*sq,120*sq,120*sq); }
+    const off=eIn(prog(t,8.08,8.25)); if(off>0){ ctx.fillStyle=`rgba(14,15,18,${off})`; ctx.fillRect(0,0,W,H); }
+  }
+  if(t>=8.25) txt(ctx,'근데,',cx,cy-120,SANS(500,60),'rgba(255,255,255,.55)','center');
+  if(t>=8.6){ const k=spring(t-8.6,22,.5); ctx.save(); ctx.translate(cx,cy+90); ctx.scale(lerp(1.25,1,clamp(k)),1);
+    ctx.font=SANS(900,170); ctx.letterSpacing='-6px'; const nw=ctx.measureText('사람은 아닙니다').width; txt(ctx,'사람은 아닙니다',-16,0,SANS(900,170),WHITE,'center','alphabetic',-6); ctx.fillStyle=LIME; ctx.beginPath(); ctx.arc(nw/2+6,-10,20,0,7); ctx.fill(); ctx.restore(); }
+  hud(t,true);
+}
+// ── S5 9.0~10.75: 3D 점구름 (흩어짐 → 구 → 도넛) → 구멍으로 줌 스루
+const NP=1100; const PTS=(()=>{const r=rngFor('cloud'),a=[];for(let i=0;i<NP;i++){const y=1-2*(i+.5)/NP, rr=Math.sqrt(1-y*y), th=i*2.39996;
+  const u=i/NP*Math.PI*2*34, v=(i%34)/34*Math.PI*2; a.push({s:[Math.cos(th)*rr,y,Math.sin(th)*rr], tor:[(1+.42*Math.cos(v))*Math.cos(u)/1.42,.42*Math.sin(v)/1.42,(1+.42*Math.cos(v))*Math.sin(u)/1.42], sc:[(r()-.5)*6,(r()-.5)*4,(r()-.5)*6]});} return a;})();
+function sCloud(t){
+  bg(INK);
+  const gather=eOut(prog(t,9.0,9.45)), tor=eIO(prog(t,9.85,10.35)), zoom=eIn(prog(t,10.35,10.75));
+  const rotY=t*1.1, rotX=.5+Math.sin(t)*.1, R=430*(1+zoom*7), cam=900;
+  const proj=[]; for(const p of PTS){ let x=lerp(p.sc[0],lerp(p.s[0],p.tor[0],tor),gather), y=lerp(p.sc[1],lerp(p.s[1],p.tor[1],tor),gather), z=lerp(p.sc[2],lerp(p.s[2],p.tor[2],tor),gather);
+    let x2=x*Math.cos(rotY)+z*Math.sin(rotY), z2=-x*Math.sin(rotY)+z*Math.cos(rotY); let y2=y*Math.cos(rotX)-z2*Math.sin(rotX), z3=y*Math.sin(rotX)+z2*Math.cos(rotX);
+    const s=cam/(cam+z3*R); proj.push([W/2+x2*R*s,H/2+y2*R*s,z3]); }
+  proj.sort((a,b)=>b[2]-a[2]); for(const [x,y,z] of proj){ const d=clamp((1-z)/2); ctx.fillStyle=z<0?`rgba(214,242,59,${.55+d*.45})`:`rgba(90,120,255,${.45+d*.45})`; const s=3+d*4; ctx.fillRect(x-s/2,y-s/2,s,s); }
+  const kt=eOut(prog(t,9.25,9.6))*(1-zoom); ctx.save(); ctx.globalAlpha=kt;
+  txt(ctx,'Artificial intelligence,',W/2,H-210,SERIF(52),'rgba(255,255,255,.9)','center'); txt(ctx,'full time.',W/2,H-150,SERIF(52),LIME,'center'); ctx.restore();
+  if(zoom>.7){ ctx.fillStyle=`rgba(0,71,171,${prog(zoom,.7,1)})`; ctx.fillRect(0,0,W,H); }
+  hud(t,true);
+}
+// ── S6 10.75~12.5: 타이포 연타
+function sSlam(t){
+  let i=SLAMS.length-1; while(i>0&&t<SLAMS[i].t) i--; const s=SLAMS[i], lt=t-s.t; bg(s.bg);
+  if(s.marquee){ const rows=7; for(let r=0;r<rows;r++){ const dir=r%2?1:-1, off=((t-11.5)*900*dir)%1400; ctx.save(); ctx.globalAlpha=r===3?1:.28;
+      const line=(s.txt+'  ').repeat(6); txt(ctx,line,-700+off,130+r*140,SANS(900,120),s.fg,'left','alphabetic',-4); ctx.restore(); } }
+  else { const k=spring(lt,24,.5); const sx=lerp(1.35,1,clamp(k)); ctx.save(); ctx.translate(W/2,H/2+90); ctx.scale(sx,1/sx*1.0);
+    ctx.filter=`blur(${Math.max(0,(1-clamp(lt/.06))*14)}px)`;
+    const fs=s.txt.length>5?200:340; txt(ctx,s.txt,0,0,SANS(900,fs),s.fg,'center','alphabetic',-10); ctx.filter='none';
+    if(s.dot){ ctx.font=SANS(900,fs); ctx.letterSpacing='-10px'; const w=ctx.measureText(s.txt).width; ctx.fillStyle=s.dot; ctx.beginPath(); ctx.arc(w/2+fs*.12,-fs*.06,fs*.07,0,7); ctx.fill(); }
+    ctx.restore(); }
+  // 사선 슬랩 와이프(퇴장)
+  const w=eIO(prog(t,12.3,12.55)); if(w>0){ ctx.save(); ctx.fillStyle=IVORY; ctx.beginPath(); const x=lerp(-900,W+600,w); ctx.moveTo(x-700,0); ctx.lineTo(x+300,0); ctx.lineTo(x-100,H); ctx.lineTo(x-1100,H); ctx.fill(); ctx.restore();
+    ctx.fillStyle=COBALT; ctx.beginPath(); ctx.arc(lerp(-200,W+200,eIO(prog(t,12.35,12.6))),H*.62,130,0,7); ctx.fill(); }
+  hud(t,s.bg!==IVORY&&s.bg!==LIME);
+}
+// ── S7 12.5~15: 끝 카드 (체크 마크 회전 진입 + 파티클, 2초 이상 정지)
+function sEnd(t){
+  bg(IVORY); const cx=W/2, cy=H/2-40;
+  ctx.font=SANS(900,150); ctx.letterSpacing='-6px'; const ww=ctx.measureText('브랜드명').width; ctx.letterSpacing='0px';
+  const mark=180, gap=50, x0=cx-(mark+gap+ww)/2;
+  const mk=spring(t-12.6,15,.42); ctx.save(); ctx.translate(x0+mark/2,cy); ctx.rotate((1-clamp(mk))*-2.4); ctx.scale(clamp(mk),clamp(mk));
+  ctx.fillStyle=COBALT; ctx.beginPath(); ctx.roundRect(-mark/2,-mark/2,mark,mark,44); ctx.fill(); check(ctx,0,4,mark*.62,WHITE,eOut(prog(t,12.85,13.15))); ctx.restore();
+  const r=rngFor('endp'); for(let i=0;i<40;i++){ const a=r()*7, u=prog(t,12.75,13.5); if(u<=0||u>=1) continue; const d=90+eOut(u)*(200+r()*220);
+    ctx.fillStyle=i%3?`rgba(0,71,171,${1-u})`:`rgba(214,242,59,${1-u})`; ctx.fillRect(x0+mark/2+Math.cos(a)*d,cy+Math.sin(a)*d,5,5); }
+  const L=[...'브랜드명']; ctx.font=SANS(900,150); ctx.letterSpacing='-6px'; let x=x0+mark+gap;
+  L.forEach((ch,i)=>{ const w=ctx.measureText(ch).width; const k=spring(t-12.7-i*.04,20,.5); ctx.save(); ctx.globalAlpha=clamp(k*3);
+    txt(ctx,ch,x,cy+54+(1-clamp(k))*70,SANS(900,150),INK,'left','alphabetic',-6); ctx.restore(); x+=w; });
+  const k2=eOut(prog(t,13.1,13.45)); ctx.save(); ctx.globalAlpha=k2;
+  txt(ctx,'Your AI employee, made for your business.',cx,cy+170,SERIF(44),'rgba(14,15,18,.75)','center');
+  txt(ctx,'우리 회사 AI 직원을 만듭니다',cx,cy+236,SANS(700,40),COBALT,'center');
+  ctx.fillStyle='rgba(14,15,18,.2)'; ctx.fillRect(cx-lerp(0,520,k2),cy+290,lerp(0,1040,k2),1.5);
+  txt(ctx,'브랜드명 · 한 줄 소개',cx-520,cy+336,MONO(20),'rgba(14,15,18,.55)'); txt(ctx,'BRAND — 2026',cx+520,cy+336,MONO(20),'rgba(14,15,18,.55)','right'); ctx.restore();
+  hud(t,false);
+}
+function scene(t){
+  ctx.setTransform(1,0,0,1,0,0); ctx.globalAlpha=1; ctx.globalCompositeOperation='source-over'; ctx.filter='none';
+  const shk=Math.max(hitk(t,S.cloud,.35),hitk(t,8.6,.2)*.5); if(shk){ const r=rngFor('sh'+Math.floor(t*60)); ctx.translate((r()-.5)*24*shk,(r()-.5)*24*shk); }
+  if(t<S.word) sMark(t); else if(t<S.chart){ sWord(t); if(t>=3.3) dotsTravel(t); } else if(t<S.morph) sChart(t);
+  else if(t<S.brk) sMorph(t); else if(t<S.cloud) sBreak(t); else if(t<S.slam) sCloud(t); else if(t<S.end) sSlam(t); else sEnd(t);
+  ctx.setTransform(1,0,0,1,0,0);
+}
+function draw(frame){ // 셔터 50%, 4 서브프레임 모션 블러
+  const Sb=4; for(let k=0;k<Sb;k++){ const t=clamp((frame+(k/Sb-.25)*.5)/FPS,0,DUR-1e-3); scene(t); out.globalAlpha=1/(k+1); out.drawImage(buf,0,0); } out.globalAlpha=1;
+}
+// ── 사운드 (같은 타이밍 정본)
+function SCORE(ac){
+  const m=ac.createGain(); m.gain.value=.5; m.connect(ac.destination);
+  const r=rngFor('nz'); const nb=ac.createBuffer(1,ac.sampleRate,ac.sampleRate); const nd=nb.getChannelData(0); for(let i=0;i<nd.length;i++) nd[i]=r()*2-1;
+  const env=(g,t,a,d,v)=>{g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(v,t+a);g.gain.exponentialRampToValueAtTime(.0008,t+a+d);};
+  const kick=(t,v=.9)=>{t=Math.max(0,t);const o=ac.createOscillator(),g=ac.createGain();o.frequency.setValueAtTime(150,t);o.frequency.exponentialRampToValueAtTime(40,t+.2);env(g,t,.003,.3,v);o.connect(g).connect(m);o.start(t);o.stop(t+.4);};
+  const nz=(t,d,v,f,ty='highpass')=>{t=Math.max(0,t);const s=ac.createBufferSource(),fl=ac.createBiquadFilter(),g=ac.createGain();s.buffer=nb;fl.type=ty;fl.frequency.value=f;env(g,t,.002,d,v);s.connect(fl).connect(g).connect(m);s.start(t,0,d+.05);};
+  const tone=(t,f,d,v,ty='sine')=>{t=Math.max(0,t);const o=ac.createOscillator(),g=ac.createGain();o.type=ty;o.frequency.value=f;env(g,t,.004,d,v);o.connect(g).connect(m);o.start(t);o.stop(t+d+.05);};
+  const chord=(t,fs,d,v)=>fs.forEach(f=>{const o=ac.createOscillator(),g=ac.createGain();o.type='triangle';o.frequency.value=f;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(v,t+.02);g.gain.setTargetAtTime(0,t+d*.6,d*.2);o.connect(g).connect(m);o.start(t);o.stop(t+d+.3);});
+  const whoosh=(t,d=.35,v=.16)=>{const s=ac.createBufferSource(),fl=ac.createBiquadFilter(),g=ac.createGain();s.buffer=nb;s.loop=true;fl.type='bandpass';fl.frequency.setValueAtTime(400,t-d);fl.frequency.exponentialRampToValueAtTime(5000,t);g.gain.setValueAtTime(0,t-d);g.gain.linearRampToValueAtTime(v,t-.02);g.gain.linearRampToValueAtTime(0,t+.05);s.connect(fl).connect(g).connect(m);s.start(Math.max(0,t-d));s.stop(t+.1);};
+  // 인트로: 패드 + 핑 (고역 타격 없음)
+  chord(0,[220,277.2,329.6],1.9,.08); tone(.12,1320,.4,.1); tone(.7,1760,.25,.08); tone(1.22,1175,.2,.12); kick(1.22,.35);
+  [0.5,1.0,1.5].forEach(x=>kick(x,.35));                                                   // 인트로 낮은 펄스
+  { const s=ac.createBufferSource(),fl=ac.createBiquadFilter(),g=ac.createGain(); s.buffer=nb; s.loop=true; fl.type='bandpass'; fl.frequency.setValueAtTime(400,1.3); fl.frequency.exponentialRampToValueAtTime(6000,1.9);
+    g.gain.setValueAtTime(0,1.3); g.gain.linearRampToValueAtTime(.22,1.88); g.gain.linearRampToValueAtTime(0,1.95); s.connect(fl).connect(g).connect(m); s.start(1.3); s.stop(2.0); }
+  whoosh(1.9);
+  // 1.9~7.5 그루브
+  for(let b=4;b<15;b++){ kick(b*B-.01,b===4?.55:.75); if(b>=6&&b%2) nz(b*B,.12,.2,1800,'bandpass'); }
+  for(let e=12;e<30;e++) nz(e*B/2,.035,.06,7500);
+  chord(1.9,[220,261.6,329.6],1.6,.07); chord(3.5,[174.6,220,261.6],2.1,.07); chord(5.6,[196,246.9,293.7],1.9,.07);
+  [1.94,1.985,2.03,2.12,2.16,2.2,2.25].forEach((x,i)=>tone(x,440+i*60,.08,.07,'triangle'));   // 글자 상승 블립
+  tone(3.33,880,.12,.12,'triangle'); kick(3.33,.3); whoosh(3.5,.3,.12); [0,1,2,3].forEach(i=>{tone(3.75+i*.12,330+i*110,.15,.07,'triangle'); tone(4.75+i*.12,880,.1,.1);});         // 레일 출발·OK
+  whoosh(5.6,.3,.14); [6.0,6.5,7.0,7.25].forEach((x,i)=>{kick(x,.5); tone(x,392+i*98,.2,.12,'square');});                    // 모핑 스냅
+  for(let s=0;s<12;s++) tone(5.9+s*.125,1568,.06,.06);
+  // 브레이크
+  whoosh(7.5,.25,.12); tone(7.72,110,.6,.2,'sawtooth'); tone(8.25,880,.12,.2); kick(8.25,.4); kick(8.6,.75); tone(8.6,220,.3,.25,'square'); nz(8.6,.2,.12,500,'lowpass');
+  { const s=ac.createBufferSource(),fl=ac.createBiquadFilter(),g=ac.createGain(); s.buffer=nb; s.loop=true; fl.type='bandpass'; fl.frequency.setValueAtTime(300,8.65); fl.frequency.exponentialRampToValueAtTime(7000,9.0);
+    g.gain.setValueAtTime(0,8.65); g.gain.linearRampToValueAtTime(.3,8.98); g.gain.linearRampToValueAtTime(0,9.02); s.connect(fl).connect(g).connect(m); s.start(8.65); s.stop(9.05); }
+  // 점구름 공개
+  kick(9.0,1); tone(9.0,55,1.2,.45); nz(9.0,.5,.22,300,'lowpass'); chord(9.0,[261.6,329.6,392,523.2],1.7,.07);
+  { const s=ac.createBufferSource(),fl=ac.createBiquadFilter(),g=ac.createGain(); s.buffer=nb; s.loop=true; fl.type='bandpass'; fl.frequency.setValueAtTime(300,10.2); fl.frequency.exponentialRampToValueAtTime(7000,10.74);
+    g.gain.setValueAtTime(0,10.2); g.gain.linearRampToValueAtTime(.28,10.72); g.gain.linearRampToValueAtTime(0,10.78); s.connect(fl).connect(g).connect(m); s.start(10.2); s.stop(10.8); }
+  for(let b=18;b<21;b++){ kick(b*B,.55); nz(b*B+.25,.1,.15,1800,'bandpass'); }
+  // 타이포 연타: 슬램마다 킥 + 화성 변화
+  const SL=[[10.75,[261.6,329.6,392]],[11.0,[293.7,349.2,440]],[11.25,[329.6,392,493.9]],[11.5,[349.2,440,523.2]],[11.875,[392,493.9,587.3]]];
+  SL.forEach(([x,c],i)=>{kick(x,i===0?.6:.85); nz(x,.08,.14,3000); chord(x,c,.3,.06);}); kick(11.875,.95); nz(11.875,.18,.2,800,'lowpass'); tone(11.875,165,.4,.22,'square'); for(let e=0;e<3;e++) nz(11.5+e*.125,.05,.1,6000);
+  // 엔드
+  whoosh(12.5,.3,.16); kick(12.6,.6); tone(12.6,98,1.6,.22); chord(12.85,[196,261.6,329.6,392,523.2],2.1,.065); tone(12.85,1568,.5,.07);
+}
+Object.assign(window,{draw,FRAMES,FPS,CUES,SCORE});
+if(!location.search.includes('render')){let f=0;(function loop(){draw(f=(f+1)%FRAMES);requestAnimationFrame(loop);})();} else draw(0);
+</script></body></html>

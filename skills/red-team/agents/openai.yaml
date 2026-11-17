@@ -1,0 +1,7 @@
+interface:
+  display_name: "Red Team"
+  short_description: "Adversarial review for bugs and blind spots"
+  default_prompt: "Use $red-team to review this result for bugs, gaps, and release risks."
+
+policy:
+  allow_implicit_invocation: false

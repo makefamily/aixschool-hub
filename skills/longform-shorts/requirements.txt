@@ -1,0 +1,7 @@
+yt-dlp
+numpy
+google-api-python-client
+google-auth-oauthlib
+# 받아쓰기: 애플 칩 맥은 mlx-whisper, 윈도우·인텔 맥은 faster-whisper 중 하나만 깔린다
+mlx-whisper; sys_platform == "darwin" and platform_machine == "arm64"
+faster-whisper; sys_platform != "darwin" or platform_machine != "arm64"

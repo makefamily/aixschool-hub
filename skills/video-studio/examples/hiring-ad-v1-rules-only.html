@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>AI 직원 채용 공고 15s</title>
+<style>html,body{margin:0;background:#000;display:grid;place-items:center;height:100vh}canvas{width:min(100vw,177.8vh);height:auto}</style>
+</head><body><canvas id="c" width="1920" height="1080"></canvas>
+<script>
+// ── 계약: draw(frame)은 frame의 순수 함수. Math.random/Date 금지. 난수는 이름 시드.
+const W=1920,H=1080,FPS=30,DUR=15,FRAMES=FPS*DUR;
+const cv=document.getElementById('c'), out=cv.getContext('2d');
+const buf=document.createElement('canvas'); buf.width=W; buf.height=H; const ctx=buf.getContext('2d');
+
+// ── 스타일 바이블
+const IVORY='#F4F1EA', INK='#0E1116', COBALT='#1F4FD8', COBALT_D='#00306F', SKY='#8DB6FF', WHITE='#FFFFFF';
+const F=(w,s)=>`${w} ${s}px Pretendard, "Apple SD Gothic Neo", sans-serif`;
+
+// ── 단일 타이밍 정본 (120BPM, 1박 0.5s)
+const BPM=120, B=60/BPM;
+const T={cond:2.0, grid:4.0, brk:7.5, but:8.0, notHuman:8.5, reveal:9.0, sub:10.5, end:12.5};
+const CONDS=[{t:2.0,txt:'24시간 근무',bg:COBALT,fg:WHITE},{t:2.5,txt:'주말 출근 OK',bg:INK,fg:WHITE},
+             {t:3.0,txt:'같은 질문 100번 OK',bg:IVORY,fg:COBALT},{t:3.5,txt:'퇴근? 없음',bg:COBALT,fg:WHITE}];
+const TASKS=['메일 답장','견적 비교','리뷰 답글','일정 정리','주간 보고','재고 확인','발주서','고객 응대','정산','회의록','SNS 게시','자료 조사'];
+const CUES=[0,1.0,2.0,2.5,3.0,3.5,4.0,7.5,9.0,12.5];
+
+// ── 수학
+const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x)), lerp=(a,b,t)=>a+(b-a)*t, prog=(t,a,b)=>clamp((t-a)/(b-a));
+const eOut=t=>1-Math.pow(1-clamp(t),4), eIn=t=>Math.pow(clamp(t),3), eInOut=t=>{t=clamp(t);return t<.5?8*t*t*t*t:1-Math.pow(-2*t+2,4)/2;};
+const back=(t,c=1.6)=>{t=clamp(t);return 1+(c+1)*Math.pow(t-1,3)+c*Math.pow(t-1,2);};
+function spring(t,k=14,z=.45){ if(t<=0) return 0; return 1-Math.exp(-z*k*t)*Math.cos(k*Math.sqrt(1-z*z)*t); }  // 닫힌형 스텝 응답
+function hash(s){let h=2166136261;for(const c of s){h^=c.charCodeAt(0);h=Math.imul(h,16777619);}return h>>>0;}
+function rngFor(k){let a=hash(k);return()=>{a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+const hit=(t,at,d=.35)=>{const u=(t-at)/d; return u<0||u>1?0:Math.pow(1-u,3);};   // 타격 감쇠(0~1)
+
+// ── 프리미티브
+function rr(x,y,w,h,r){ctx.beginPath();ctx.roundRect(x,y,w,h,r);}
+function text(s,x,y,size,w=900,col=WHITE,align='left',track=0){
+  ctx.save(); ctx.font=F(w,size); ctx.fillStyle=col; ctx.textAlign=align; ctx.textBaseline='alphabetic';
+  if(track){ ctx.letterSpacing=track+'px'; } ctx.fillText(s,x,y); ctx.restore();
+}
+function hud(t,dark){   // 전 구간 고정 위치 HUD
+  const c=dark?'rgba(255,255,255,.55)':'rgba(14,17,22,.5)';
+  ctx.save(); ctx.font=F(600,20); ctx.fillStyle=c; ctx.letterSpacing='3px';
+  ctx.fillText('채용공고  No.0001',72,68); ctx.textAlign='right'; ctx.fillText('BRAND',W-72,68);
+  const f=Math.round(t*FPS); ctx.fillText(`${String(Math.floor(t)).padStart(2,'0')}:${String(f%FPS).padStart(2,'0')}  /  15:00`,W-72,H-56);
+  ctx.textAlign='left'; ctx.fillText('AI · 24/7 · FULL TIME',72,H-56);
+  ctx.fillStyle=dark?'rgba(255,255,255,.25)':'rgba(14,17,22,.18)'; ctx.fillRect(72,H-44,W-144,2);
+  ctx.fillStyle=dark?SKY:COBALT; ctx.fillRect(72,H-44,(W-144)*t/DUR,2);
+  ctx.restore();
+}
+function grain(t,alpha){ // 정적 그레인(업로드 품질 위해 프레임마다 바꾸지 않음)
+  const r=rngFor('grain'); ctx.save(); ctx.globalAlpha=alpha;
+  for(let i=0;i<900;i++){ctx.fillStyle=r()<.5?'#000':'#fff'; ctx.fillRect(r()*W,r()*H,2,2);} ctx.restore();
+}
+function shake(t,at,amp){ const k=hit(t,at,.25); if(!k) return [0,0]; const f=Math.floor(t*60); const r=rngFor('sh'+f); return [(r()-.5)*amp*k,(r()-.5)*amp*k]; }
+
+let _tl=null; function textLayer(){ if(!_tl){_tl=document.createElement('canvas'); _tl.width=W; _tl.height=H;} return _tl; }
+// ── 장면
+function sceneOpen(t){ // 0~2 : 직원 / 구합니다.
+  ctx.fillStyle=IVORY; ctx.fillRect(0,0,W,H);
+  // 0프레임부터 움직이는 파랑 바
+  const bx=lerp(-W*0.2,W*0.08,eOut(prog(t,0,.9)));
+  ctx.fillStyle=COBALT; ctx.fillRect(bx,170,W*1.4,22);
+  // 거대한 '직원' : 이미 화면에 걸친 채 진입(0프레임 빈 화면 금지)
+  const x=lerp(560,150,eOut(prog(t,0,.8)));
+  text('직원',x,640,420,900,INK,'left',-18);
+  // '구합니다.' 1.0초 슬램
+  const k=spring(t-1.0,20,.42); if(t>=1.0){ ctx.save(); const s=lerp(1.35,1,clamp(k)); ctx.translate(1080,640); ctx.scale(s,s);
+    ctx.globalAlpha=clamp(prog(t,1.0,1.06)); text('구합니다.',0,0,160,800,COBALT,'left',-4); ctx.restore(); }
+  // 밑줄 드로우
+  ctx.fillStyle=INK; ctx.fillRect(150,700,lerp(0,1620,eOut(prog(t,1.05,1.6))),10);
+  text('경력 무관 · 즉시 출근 가능자',150,780,40,600,'rgba(14,17,22,.6)');
+  hud(t,false);
+}
+function sceneCond(t){ // 2~4 : 조건 4개 스매시 컷
+  let i=CONDS.length-1; while(i>0&&t<CONDS[i].t) i--; const c=CONDS[i], lt=t-c.t;
+  ctx.fillStyle=c.bg; ctx.fillRect(0,0,W,H);
+  // 배경 거대 번호
+  text(String(i+1).padStart(2,'0'),W-80,H-80,520,900,c.bg===IVORY?'rgba(0,71,171,.08)':'rgba(255,255,255,.08)','right',-20);
+  const s=lerp(1.12,1,eOut(prog(lt,0,.28)));
+  ctx.save(); ctx.translate(150,600); ctx.scale(s,s);
+  // 체크박스 + 틱
+  ctx.strokeStyle=c.fg; ctx.lineWidth=10; rr(0,-150,130,130,22); ctx.stroke();
+  const ck=eOut(prog(lt,.08,.26)); if(ck>0){ ctx.beginPath(); ctx.moveTo(28,-88); ctx.lineTo(28+lerp(0,30,clamp(ck*2)),-88+lerp(0,30,clamp(ck*2)));
+    if(ck>.5) ctx.lineTo(58+lerp(0,48,clamp(ck*2-1)),-58-lerp(0,62,clamp(ck*2-1))); ctx.lineCap='round'; ctx.lineJoin='round'; ctx.lineWidth=16; ctx.stroke(); }
+  text(c.txt,180,-26,170,900,c.fg,'left',-6);
+  ctx.restore();
+  text(`조건 ${i+1} / 4`,150,760,34,600,c.bg===IVORY?'rgba(14,17,22,.55)':'rgba(255,255,255,.6)','left',2);
+  hud(t,c.bg!==IVORY);
+}
+function taskPos(i){ const col=i%3,row=Math.floor(i/3); return [850+col*390,290+row*150]; }
+function sceneGrid(t){ // 4~7.5 : 사원증 + 업무 칩 12개
+  const lt=t-T.grid;
+  ctx.fillStyle=IVORY; ctx.fillRect(0,0,W,H);
+  // 미세 격자
+  ctx.strokeStyle='rgba(0,71,171,.07)'; ctx.lineWidth=1; for(let x=0;x<W;x+=60){ctx.beginPath();ctx.moveTo(x+.5,0);ctx.lineTo(x+.5,H);ctx.stroke();} for(let y=0;y<H;y+=60){ctx.beginPath();ctx.moveTo(0,y+.5);ctx.lineTo(W,y+.5);ctx.stroke();}
+  // 카메라 천천히 푸시인
+  const cam=lerp(1,1.06,eInOut(prog(t,4,7.5)));
+  ctx.save(); ctx.translate(W/2,H/2); ctx.scale(cam,cam); ctx.translate(-W/2,-H/2);
+  TASKS.forEach((name,i)=>{
+    const [tx,ty]=taskPos(i), at=4.15+i*0.125;              // 8분음표 스태거
+    const k=spring(t-at,16,.5); if(t<at) return;
+    const r=rngFor('chip'+i); const fx=tx+(r()-.5)*260, fy=H+160+ (i%3)*40;
+    const x=lerp(fx,tx,clamp(k)), y=lerp(fy,ty,clamp(k));
+    const done=5.5+i*0.125;                                    // 박자마다 체크
+    const d=eOut(prog(t,done,done+.15));
+    ctx.save(); ctx.translate(x,y); ctx.rotate((1-clamp(k))*(r()-.5)*0.6);
+    ctx.shadowColor='rgba(0,48,111,.18)'; ctx.shadowBlur=24; ctx.shadowOffsetY=10;
+    ctx.fillStyle=d>0.5?COBALT:WHITE; rr(-170,-58,340,116,58); ctx.fill(); ctx.shadowColor='transparent';
+    ctx.lineWidth=3; ctx.strokeStyle=d>0.5?COBALT:'rgba(0,71,171,.25)'; ctx.stroke();
+    ctx.fillStyle=d>0.5?WHITE:'rgba(0,71,171,.15)'; ctx.beginPath(); ctx.arc(-118,0,24,0,7); ctx.fill();
+    if(d>0){ctx.strokeStyle=d>0.5?COBALT:WHITE; ctx.lineWidth=6; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-129,0); ctx.lineTo(-121,9); ctx.lineTo(-104,-11); ctx.stroke();}
+    text(name,-80,14,40,700,d>0.5?WHITE:INK);
+    ctx.restore();
+  });
+  ctx.restore();
+  // 처리 카운터
+  const n=TASKS.filter((_,i)=>t>=5.5+i*0.125+.075).length;
+  text('사람이 하던 일,',120,300,72,900,INK,'left',-2);
+  text('전부.',120,390,72,900,COBALT,'left',-2);
+  text('처리 완료',120,560,32,600,'rgba(14,17,22,.55)');
+  text(String(n).padStart(2,'0'),120,760,220,900,COBALT,'left',-8);
+  text('/ 12',400,760,64,700,'rgba(14,17,22,.3)');
+  hud(t,false);
+}
+function sceneBreak(t){ // 7.5~9 : 꺼짐 → 근데, → 사람은 아닙니다.
+  const drain=eIn(prog(t,7.5,7.72));
+  if(drain<1){ sceneGrid(Math.min(t,7.49)); ctx.fillStyle=`rgba(14,17,22,${drain})`; ctx.fillRect(0,0,W,H); }
+  else { ctx.fillStyle=INK; ctx.fillRect(0,0,W,H); }
+  if(t>=T.but) text('근데,',W/2,470,64,500,'rgba(255,255,255,.6)','center');
+  if(t>=T.notHuman){ const k=eOut(prog(t,8.5,8.56)); ctx.save(); ctx.globalAlpha=k; ctx.translate(0,(1-k)*30);
+    text('사람은 아닙니다.',W/2,640,150,900,WHITE,'center',-4); ctx.restore(); }
+  if(t>=7.72) hud(t,true);
+}
+function sceneReveal(t){ // 9~12.5 : 아이리스 + AI 직원
+  ctx.fillStyle=INK; ctx.fillRect(0,0,W,H);
+  const R=lerp(0,1250,eOut(prog(t,9.0,9.55)));
+  const g=ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.max(R,1));
+  g.addColorStop(0,'#1463D6'); g.addColorStop(.7,COBALT); g.addColorStop(1,COBALT_D);
+  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(W/2,H/2,R,0,7); ctx.fill();
+  // 파티클 폭발
+  const r=rngFor('burst');
+  for(let i=0;i<140;i++){ const a=r()*Math.PI*2, sp=300+r()*900, life=.6+r()*.9, u=prog(t,9.0,9.0+life);
+    if(u<=0||u>=1) continue; const d=sp*eOut(u); ctx.fillStyle=`rgba(255,255,255,${(1-u)*.9})`;
+    const s=2+r()*5; ctx.fillRect(W/2+Math.cos(a)*d,H/2+Math.sin(a)*d,s,s); }
+  { const r2=rngFor('dust'); for(let i=0;i<60;i++){ const x=r2()*W, y=(r2()*H - (t-9)*(20+r2()*40)+H)%H; ctx.fillStyle=`rgba(255,255,255,${.08+r2()*.15})`; const s=1+r2()*3; ctx.fillRect(x,y,s,s);} }
+  // AI 직원 (스프링 스케일 + 빛 스윕)
+  if(t>=9.15){ const k=spring(t-9.15,13,.4);
+    const L=textLayer(); const lc=L.getContext('2d'); lc.setTransform(1,0,0,1,0,0); lc.clearRect(0,0,W,H);
+    lc.globalCompositeOperation='source-over'; lc.font=F(900,340); lc.textAlign='center'; lc.letterSpacing='-14px'; lc.fillStyle=WHITE; lc.fillText('AI 직원',W/2,H/2+150);
+    lc.globalCompositeOperation='source-atop';                        // 빛 스윕은 글자 안쪽에만
+    const sx=W/2+lerp(-900,900,eInOut(prog(t,9.6,10.6)));
+    const lg=lc.createLinearGradient(sx-160,0,sx+160,0); lg.addColorStop(0,'rgba(141,182,255,0)'); lg.addColorStop(.5,'rgba(141,182,255,.95)'); lg.addColorStop(1,'rgba(141,182,255,0)');
+    lc.fillStyle=lg; lc.fillRect(0,0,W,H); lc.globalCompositeOperation='source-over';
+    const s=lerp(.6,1,clamp(k))*lerp(1,1.05,eInOut(prog(t,10,12.5)));   // 스프링 착지 후 느린 푸시인
+    ctx.save(); ctx.translate(W/2,H/2); ctx.scale(s,s); ctx.translate(-W/2,-H/2); ctx.drawImage(L,0,0); ctx.restore(); }
+  // 서브라인 글자 스태거
+  const line='지치지 않고, 사장님 방식대로.'; ctx.save(); ctx.font=F(600,52); ctx.textAlign='left';
+  const total=ctx.measureText(line).width; let x=W/2-total/2;
+  [...line].forEach((ch,i)=>{ const at=T.sub+i*0.03, k=eOut(prog(t,at,at+.25)); const w=ctx.measureText(ch).width;
+    if(k>0){ ctx.globalAlpha=k; ctx.fillStyle='rgba(255,255,255,.92)'; ctx.fillText(ch,x,H/2+250+(1-k)*24); } x+=w; });
+  ctx.restore();
+  hud(t,true);
+}
+function sceneEnd(t){ // 12.5~15 : 와이프 → 엔드카드 (2초 이상 정지)
+  const w=eInOut(prog(t,12.5,12.95));
+  ctx.fillStyle=IVORY; ctx.fillRect(0,0,W,H);
+  if(w<1){ ctx.save(); ctx.beginPath(); ctx.rect(W*w,0,W,H); ctx.clip(); sceneReveal(12.49); ctx.restore(); }
+  const k=eOut(prog(t,12.75,13.2));
+  ctx.save(); ctx.globalAlpha=k; ctx.translate(0,(1-k)*20);
+  // 로고 마크 + 워드마크: 폭을 재서 화면 가운데 정렬 (앞 장면 체크 모티프 회수)
+  ctx.font=F(900,150); ctx.letterSpacing='-5px'; const ww=ctx.measureText('브랜드명').width; ctx.letterSpacing='0px';
+  const mark=190, gap=48, x0=W/2-(mark+gap+ww)/2, cy=H/2-60;
+  ctx.fillStyle=COBALT; rr(x0,cy-mark/2,mark,mark,46); ctx.fill();
+  ctx.strokeStyle=WHITE; ctx.lineWidth=20; ctx.lineCap='round'; ctx.lineJoin='round'; ctx.beginPath();
+  ctx.moveTo(x0+48,cy+2); ctx.lineTo(x0+80,cy+34); ctx.lineTo(x0+145,cy-36); ctx.stroke();
+  text('브랜드명',x0+mark+gap,cy+54,150,900,INK,'left',-5);
+  text('우리 회사 AI 직원을 만듭니다',W/2,cy+190,60,700,'rgba(14,17,22,.75)','center');
+  ctx.restore();
+  const k2=eOut(prog(t,13.3,13.7)); ctx.save(); ctx.globalAlpha=k2;
+  ctx.fillStyle=COBALT; ctx.fillRect(W/2-lerp(0,380,k2),cy+240,lerp(0,760,k2),5);
+  text('브랜드명 · 한 줄 소개',W/2,cy+310,32,600,'rgba(14,17,22,.55)','center',2); ctx.restore();
+  hud(t,false);
+}
+function scene(t){
+  ctx.setTransform(1,0,0,1,0,0); ctx.globalAlpha=1; ctx.globalCompositeOperation='source-over';
+  const [sx,sy]=shake(t,1.0,14); const [rx,ry]=shake(t,T.reveal,22); ctx.translate(sx+rx,sy+ry);
+  if(t<T.cond) sceneOpen(t); else if(t<T.grid) sceneCond(t); else if(t<T.brk) sceneGrid(t);
+  else if(t<T.reveal) sceneBreak(t); else if(t<T.end) sceneReveal(t); else sceneEnd(t);
+  ctx.setTransform(1,0,0,1,0,0); grain(t,.035);
+}
+// ── 모션블러: 셔터 50%, 4 서브프레임 평균
+function draw(frame){
+  const S=4; out.globalCompositeOperation='source-over';
+  for(let k=0;k<S;k++){ const t=Math.min(DUR-1e-3,(frame+(k/S-.25)*.5)/FPS); scene(Math.max(0,t));
+    out.globalAlpha=1/(k+1); out.drawImage(buf,0,0); }
+  out.globalAlpha=1;
+}
+// ── 사운드: 같은 타이밍 정본을 읽는다 (OfflineAudioContext)
+function SCORE(ac){
+  const master=ac.createGain(); master.gain.value=.55; master.connect(ac.destination);
+  const r=rngFor('noise'); const nb=ac.createBuffer(1,ac.sampleRate*1,ac.sampleRate); const nd=nb.getChannelData(0); for(let i=0;i<nd.length;i++) nd[i]=r()*2-1;
+  const env=(g,t,a,d,v)=>{g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(v,t+a);g.gain.exponentialRampToValueAtTime(.0008,t+a+d);};
+  const kick=(t,v=.9)=>{const o=ac.createOscillator(),g=ac.createGain();o.frequency.setValueAtTime(140,t);o.frequency.exponentialRampToValueAtTime(42,t+.18);env(g,t,.003,.32,v);o.connect(g).connect(master);o.start(t);o.stop(t+.4);};
+  const noise=(t,d,v,f,type='highpass')=>{const s=ac.createBufferSource(),fl=ac.createBiquadFilter(),g=ac.createGain();s.buffer=nb;fl.type=type;fl.frequency.value=f;env(g,t,.002,d,v);s.connect(fl).connect(g).connect(master);s.start(t,0,d+.05);};
+  const tone=(t,f,d,v,type='sine')=>{const o=ac.createOscillator(),g=ac.createGain();o.type=type;o.frequency.value=f;env(g,t,.004,d,v);o.connect(g).connect(master);o.start(t);o.stop(t+d+.05);};
+  const chord=(t,fs,d,v)=>fs.forEach(f=>{const o=ac.createOscillator(),g=ac.createGain();o.type='triangle';o.frequency.value=f;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(v,t+.02);g.gain.setTargetAtTime(0,t+d*.6,d*.2);o.connect(g).connect(master);o.start(t);o.stop(t+d+.3);});
+  const Am=[220,261.6,329.6], F=[174.6,220,261.6], C=[261.6,329.6,392], G=[196,246.9,293.7], Em=[164.8,196,246.9];
+  // 0~7.5 그루브: 킥 매 박, 하이햇은 2초부터(조용한 도입부 고역 타격 금지), 코드 변화로 컷 표시
+  for(let b=0;b<15;b++){ const t=b*B; kick(Math.max(0,t-.01),.8); if(t>=2&&b%2==1) noise(t,.12,.22,1800,'bandpass'); }
+  for(let e=4;e<30;e++){ const t=e*B/2; if(t>=2&&t<7.5) noise(t,.04,.08,7000); }
+  chord(0,Am,2,.07); chord(2,F,.5,.08); chord(2.5,C,.5,.08); chord(3,G,.5,.08); chord(3.5,Em,.5,.08); chord(4,Am,3.5,.07);
+  tone(Math.max(0,1.0-.02),110,.5,.35,'sawtooth'); noise(.98,.25,.18,400,'lowpass');                 // '구합니다' 슬램
+  TASKS.forEach((_,i)=>tone(4.15+i*.125-.02,660+i*40,.09,.08,'triangle'));                          // 칩 도착 블립
+  TASKS.forEach((_,i)=>tone(5.5+i*.125,1320,.07,.06,'sine'));                                        // 체크 틱
+  // 7.5 브레이크: 전부 멈춤, 틱 2개, 9초로 라이저
+  tone(8.0,880,.12,.22); kick(8.0,.45); tone(8.5,660,.18,.25); kick(8.5,.7); noise(8.5,.15,.12,500,'lowpass');
+  { const s=ac.createBufferSource(),fl=ac.createBiquadFilter(),g=ac.createGain(); s.buffer=nb; s.loop=true; fl.type='bandpass';
+    fl.frequency.setValueAtTime(300,8.4); fl.frequency.exponentialRampToValueAtTime(6000,9.0); g.gain.setValueAtTime(0,8.4); g.gain.linearRampToValueAtTime(.35,8.98); g.gain.linearRampToValueAtTime(0,9.02);
+    s.connect(fl).connect(g).connect(master); s.start(8.4); s.stop(9.05); }
+  // 9.0 공개: 임팩트 + 서브 붐 + 밝은 코드
+  kick(9.0,1); tone(9.0,55,1.2,.5); noise(9.0,.6,.25,300,'lowpass'); chord(9.0,[261.6,329.6,392,523.2],3,.08);
+  for(let b=18;b<25;b++){ kick(b*B,.55); if(b%2==0) noise(b*B,.12,.18,1800,'bandpass'); }
+  // 12.5 엔드: 와이프 휙 + 해소 화음
+  noise(12.45,.35,.14,2500,'bandpass'); chord(12.75,[196,261.6,329.6,392],2.2,.07); tone(12.75,98,1.5,.2);
+}
+Object.assign(window,{draw,FRAMES,FPS,CUES,SCORE});
+if(!location.search.includes('render')){let f=0;(function loop(){draw(f=(f+1)%FRAMES);requestAnimationFrame(loop);})();} else draw(0);
+</script></body></html>

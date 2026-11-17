@@ -1,0 +1,31 @@
+# 비밀 — 절대 올리지 않음
+auth.json
+*.env
+.env*
+*.pem
+*.key
+credentials*
+secrets*
+
+# 각 PC에만 있는 것
+codex-home/
+work/
+node_modules/
+.DS_Store
+Thumbs.db
+*.log
+
+# 큰 파일
+*.mp4
+*.mov
+*.wav
+*.zip
+desktop/src-tauri/target/
+desktop/src-tauri/gen/
+!desktop/release/*.zip
+release/
+build/windows-app/
+build/scan-result.txt
+build/*.log
+desktop/src-tauri/target/
+desktop/src-tauri/gen/

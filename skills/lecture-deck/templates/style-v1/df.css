@@ -1,0 +1,851 @@
+/* ============================================================
+   5차시 덱 v2 — 8/21 ASC 특강 build-v2 df.css 복사본 + 하단 v2 추가분
+   8규칙: no_box / accent 1곳 / 거대숫자 3단 / 4모서리 크롬 /
+          eyebrow→마침표 액션타이틀→지배오브젝트1개→tail / keep-all
+   팔레트는 2종. body[data-pal="df"](기본) · body[data-pal="navy"]
+   ============================================================ */
+
+/* 기본 브랜드 · 배경은 일러스트 14장에 구워진 #0A0E2E 그대로 */
+:root{
+  --bg-0:#0A0E2E; --bg-1:#101540; --bg-2:#161C4E;
+  --ink:#F2F5FF; --body:#A8B3DC; --mute:#7681B0; --faint:#414A7E;
+  --line:rgba(200,214,255,.10); --line-strong:rgba(200,214,255,.20);
+  --accent:#5C8AFF; --accent-2:#89ABFF; --accent-soft:rgba(92,138,255,.12);
+  --glow:#3B6FE3;
+  --grain-opacity:.035;
+  --font:"Pretendard Variable",Pretendard,"Apple SD Gothic Neo",-apple-system,system-ui,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono","JetBrains Mono",Consolas,monospace;
+  --num:var(--ink);          /* 거대숫자 색 */
+  --em:var(--accent-2);      /* 액션타이틀 핵심어 */
+  --scrim:10,14,46;          /* 커버 스크림 RGB */
+  --grain-blend:overlay;
+  --shot-frame:rgba(200,214,255,.16);
+  --W:1920px; --H:1080px; --mx:140px; --my:96px;
+}
+/* ── 대조안 B · 파랑 다크 (#0047AB 계열을 배경에) ── */
+body[data-pal="blue"]{
+  --bg-0:#04102B; --bg-1:#07193C; --bg-2:#0A2150;
+  --ink:#F2F6FF; --body:#A7BCE2; --mute:#6F87B4; --faint:#3A5083;
+  --line:rgba(190,214,255,.11); --line-strong:rgba(190,214,255,.22);
+  --accent:#3D82E8; --accent-2:#6BA6FF; --accent-soft:rgba(0,71,171,.22);
+  --glow:#0047AB; --scrim:4,16,43;
+  --shot-frame:rgba(190,214,255,.18);
+}
+/* ── 대조안 C · 아이보리 페이퍼 + 파랑 (#0047AB 원색) ── */
+body[data-pal="paper"]{
+  --bg-0:#F7F4EC; --bg-1:#EFEBE0; --bg-2:#E7E1D3;
+  --ink:#131313; --body:#43423E; --mute:#7A766C; --faint:#BDB6A6;
+  --line:rgba(19,19,19,.12); --line-strong:rgba(19,19,19,.22);
+  --accent:#0047AB; --accent-2:#0047AB; --accent-soft:rgba(0,71,171,.09);
+  --glow:#7E9DD6; --scrim:247,244,236;
+  --num:#0047AB; --em:#0047AB;
+  --grain-blend:multiply; --grain-opacity:.02;
+  --shot-frame:rgba(19,19,19,.16);
+}
+/* ── 대조안 D · 순백 + 파랑 ── */
+body[data-pal="white"]{
+  --bg-0:#FFFFFF; --bg-1:#F6F7FA; --bg-2:#EEF0F5;
+  --ink:#131313; --body:#3F4249; --mute:#787D87; --faint:#C3C7CF;
+  --line:rgba(19,19,19,.11); --line-strong:rgba(19,19,19,.20);
+  --accent:#0047AB; --accent-2:#0047AB; --accent-soft:rgba(0,71,171,.08);
+  --glow:#88A8DC; --scrim:255,255,255;
+  --num:#0047AB; --em:#0047AB;
+  --grain-blend:multiply; --grain-opacity:.015;
+  --shot-frame:rgba(19,19,19,.14);
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:#000}
+body{
+  font-family:var(--font);color:var(--ink);
+  -webkit-font-smoothing:antialiased;text-rendering:geometricPrecision;
+  word-break:keep-all;overflow-wrap:normal;line-break:strict;
+}
+
+/* ── 무대 · 1920×1080을 화면에 맞춰 스케일 ── */
+#stage{position:fixed;inset:0;overflow:hidden;background:#000}
+#deck{width:var(--W);height:var(--H);position:absolute;left:50%;top:50%;transform-origin:center center}
+.slide{
+  position:absolute;inset:0;width:var(--W);height:var(--H);overflow:hidden;
+  background:var(--bg-0);isolation:isolate;
+  opacity:0;visibility:hidden;transition:opacity .3s ease;
+}
+.slide.on{opacity:1;visibility:visible}
+
+/* ── 배경 ── */
+.bg{position:absolute;inset:0;z-index:0;pointer-events:none}
+.bg-img{position:absolute;inset:0;z-index:0;width:100%;height:100%;object-fit:cover}
+.bg-grain{position:absolute;inset:0;z-index:1;pointer-events:none;opacity:var(--grain-opacity);
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/></filter><rect width='120' height='120' filter='url(%23n)'/></svg>");
+  mix-blend-mode:var(--grain-blend)}
+.scrim{position:absolute;inset:0;z-index:1;pointer-events:none}
+.hairgrid{position:absolute;inset:0;z-index:0;opacity:.5;
+  background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+  background-size:96px 96px;
+  -webkit-mask-image:radial-gradient(120% 90% at 82% 18%,#000,transparent 70%);
+          mask-image:radial-gradient(120% 90% at 82% 18%,#000,transparent 70%)}
+
+.frame{position:absolute;inset:0;z-index:2;padding:var(--my) var(--mx);display:flex;flex-direction:column}
+
+/* ── 4모서리 크롬 ── */
+.deck-brand{position:absolute;left:var(--mx);top:54px;z-index:5;display:flex;align-items:center;gap:14px}
+.deck-brand .mark{width:34px;height:34px;border-radius:9px;
+  background:linear-gradient(150deg,var(--accent),var(--glow));display:grid;place-items:center;
+  box-shadow:0 0 0 1px var(--line-strong),0 6px 18px rgba(76,99,230,.35)}
+.deck-brand .mark::after{content:"";width:12px;height:12px;border-radius:3px;background:#fff;opacity:.95;
+  clip-path:polygon(0 0,100% 0,100% 55%,55% 55%,55% 100%,0 100%)}
+.deck-brand .wm{font-size:18px;font-weight:600;letter-spacing:-.01em;color:var(--ink)}
+.deck-brand .wm b{color:var(--accent-2);font-weight:600}
+.deck-meta{position:absolute;right:var(--mx);top:58px;z-index:5;font-family:var(--mono);
+  font-size:15px;letter-spacing:.04em;color:var(--mute);text-align:right}
+.deck-author{position:absolute;left:var(--mx);bottom:56px;z-index:5;font-family:var(--mono);
+  font-size:15px;letter-spacing:.04em;color:var(--mute)}
+.deck-page{position:absolute;right:var(--mx);bottom:56px;z-index:5;font-family:var(--mono);
+  font-size:15px;letter-spacing:.08em;color:var(--mute)}
+.deck-page b{color:var(--ink);font-weight:600}
+
+/* ── 에디토리얼 골격 ── */
+.eyebrow{display:inline-flex;align-items:center;gap:12px;font-family:var(--mono);
+  font-size:17px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--accent-2)}
+.eyebrow::before{content:"";width:34px;height:2px;background:var(--accent);border-radius:2px}
+.eyebrow.ko{letter-spacing:.04em;text-transform:none;font-family:var(--font);font-size:19px}
+.action-title{font-size:80px;font-weight:800;line-height:1.08;letter-spacing:-.03em;color:var(--ink);max-width:20ch}
+.action-title.xl{font-size:104px;max-width:15ch}
+.action-title .dim{color:var(--mute)}
+.action-title em{font-style:normal;color:var(--em)}
+
+.subhead em{font-style:normal;color:var(--em);font-weight:600}
+.subhead{font-size:29px;font-weight:500;line-height:1.5;letter-spacing:-.01em;color:var(--body);max-width:46ch}
+.small{font-size:20px;line-height:1.6;color:var(--mute)}
+.tail{position:relative;margin-top:auto;padding-top:26px;
+  font-size:22px;line-height:1.55;color:var(--body);max-width:70ch}
+.tail::before{content:"";position:absolute;left:0;top:0;height:1px;width:100%;
+  background:var(--line);transform:scaleX(0);transform-origin:left;
+  transition:transform .7s cubic-bezier(.22,1,.36,1) var(--d,0ms)}
+.slide.on .tail::before{transform:scaleX(1)}
+.tail b{color:var(--em);font-weight:600}
+.spacer{flex:1}
+.frame>.spacer:first-of-type{flex:.8}
+.gap-s{height:22px}.gap-m{height:40px}.gap-l{height:64px}
+
+/* ── 거대숫자 ── */
+.stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:0}
+.stat{display:flex;flex-direction:column;gap:14px;padding:0 56px}
+.stat:first-child{padding-left:0}
+.stat{position:relative}
+.stat+.stat::before{content:"";position:absolute;left:0;top:0;bottom:0;width:1px;
+  background:var(--line);transform:scaleY(0);transform-origin:top;
+  transition:transform .55s cubic-bezier(.22,1,.36,1) var(--d,0ms)}
+.slide.on .stat+.stat::before{transform:scaleY(1)}
+.stat .k{font-family:var(--mono);font-size:16px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+.stat .v{font-size:150px;font-weight:800;line-height:.92;letter-spacing:-.045em;color:var(--num);
+  font-feature-settings:"tnum" 1;display:flex;align-items:baseline;gap:4px}
+.stat .v small{font-size:54px;font-weight:500;color:var(--mute);letter-spacing:-.02em}
+.stat .v small.pre{margin-right:6px}
+.stat .c{font-size:21px;line-height:1.5;color:var(--body);max-width:24ch}
+
+/* ── 파이프라인 flow ── */
+.flow{display:grid;grid-template-columns:repeat(6,1fr);align-items:stretch}
+.flow .node{position:relative;padding:30px 26px 30px 30px;min-height:175px;
+  display:flex;flex-direction:column}
+.flow .node:first-child{padding-left:0}
+.flow .node+.node::after{content:"";position:absolute;left:0;top:0;bottom:0;width:1px;
+  background:var(--line);transform:scaleY(0);transform-origin:top;
+  transition:transform .5s cubic-bezier(.22,1,.36,1) var(--d,0ms)}
+.slide.on .flow .node+.node::after{transform:scaleY(1)}
+.flow .node .n{font-family:var(--mono);font-size:16px;color:var(--mute);letter-spacing:.1em}
+.flow .node .t{font-size:38px;font-weight:600;margin:16px 0 12px;letter-spacing:-.025em;color:var(--ink)}
+.flow .node .d{font-size:20px;line-height:1.5;color:var(--body);font-feature-settings:"tnum" 1}
+.flow .node+.node::before{content:"→";position:absolute;left:-10px;top:86px;
+  font-family:var(--mono);font-size:19px;line-height:1;color:var(--mute);
+  background:var(--bg-0);padding:7px 0}
+
+/* ── HUD (무대에서는 숨김) ── */
+#hud{position:fixed;right:18px;bottom:14px;z-index:20;font-family:var(--mono);
+  font-size:12px;color:#4a4f57;letter-spacing:.06em}
+#hud b{color:#9aa0a8;font-weight:500}
+
+/* ── flat 모드 (?flat=1) · 세 장을 세로로 쌓아 원본 1920×1080 그대로 검수 ── */
+body.flat{overflow:auto}
+body.flat #stage{position:static;overflow:visible}
+body.flat #deck{position:static;width:1920px;height:auto;transform:none!important}
+body.flat .slide{position:relative;inset:auto;opacity:1;visibility:visible;
+  display:block;margin:0 0 24px}
+body.flat #hud{display:none}
+
+.glow{position:absolute;border-radius:50%;filter:blur(110px);opacity:.34;z-index:0}
+
+/* ══════════════════════════════════════════════════════════
+   모션 — 슬라이드 진입 시에만. 라이브러리 없음. Chrome 기준
+   .anim         : 아래에서 올라오며 나타남 (마스크 리빌)
+   .anim.fade    : 위치 이동 없이 페이드만
+   --d           : 개별 지연(ms). JS가 등장 순서대로 넣는다
+   ══════════════════════════════════════════════════════════ */
+.anim{opacity:0;transform:translateY(22px);
+  transition:opacity .58s cubic-bezier(.22,1,.36,1) var(--d,0ms),
+             transform .58s cubic-bezier(.22,1,.36,1) var(--d,0ms)}
+.slide.on .anim{opacity:1;transform:none}
+.anim.fade{transform:none}
+
+/* 액션타이틀은 글자가 아래에서 밀려 올라오는 리빌 */
+.reveal{overflow:hidden;display:block}
+.reveal>span{display:block;transform:translateY(105%);
+  transition:transform .72s cubic-bezier(.19,1,.22,1) var(--d,0ms)}
+.slide.on .reveal>span{transform:none}
+
+/* 거대숫자 — 자릿수가 흔들리지 않게 tnum 고정 */
+.num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+
+/* 커버 히어로 켄번스 */
+.slide.on .kb{animation:kb 16s cubic-bezier(.2,.6,.3,1) forwards}
+@keyframes kb{from{transform:scale(1.34)}to{transform:scale(1.46) translateX(-1.2%)}}
+
+/* eyebrow 앞 선이 그어짐 */
+.slide .eyebrow::before{transform:scaleX(0);transform-origin:left;
+  transition:transform .5s cubic-bezier(.22,1,.36,1) var(--d,0ms)}
+.slide.on .eyebrow::before{transform:scaleX(1)}
+
+/* flow 화살표는 노드가 다 선 뒤에 */
+.flow .node+.node::before{opacity:0;transition:opacity .4s ease var(--d,0ms)}
+.slide.on .flow .node+.node::before{opacity:1}
+
+@media (prefers-reduced-motion:reduce){
+  .anim,.reveal>span,.slide .eyebrow::before,.stat+.stat::before,
+  .flow .node+.node::after,.flow .node+.node::before,.tail::before{
+    transition:none!important;animation:none!important;
+    opacity:1!important;transform:none!important}
+}
+
+/* ══════════════════════════════════════════════════════════
+   스텝 포커스 · 딤  — 레퍼런스 영상의 시그니처 연출
+   한 장 안에서 →를 누르면 초점이 옮겨간다. 장을 나누지 않는다
+   no_box라 테두리 점등 대신 밝기·accent로 초점을 준다
+   ══════════════════════════════════════════════════════════ */
+.slide[data-step]:not([data-step="0"]) .focusable{
+  opacity:.26;filter:saturate(.35);
+  transition:opacity .38s cubic-bezier(.16,1,.3,1),filter .38s cubic-bezier(.16,1,.3,1)}
+.slide[data-step] .focusable{transition:opacity .38s cubic-bezier(.16,1,.3,1),
+  filter .38s cubic-bezier(.16,1,.3,1)}
+.slide[data-step] .focusable.act{opacity:1;filter:none}
+/* 초점 잡힌 칸은 번호·제목이 accent로 */
+.slide[data-step] .focusable.act .n{color:var(--accent-2)}
+.slide[data-step] .focusable.act .t{color:var(--ink)}
+.slide[data-step] .focusable.act .k{color:var(--accent-2)}
+/* 초점 칸 아래 accent 밑줄이 그어짐 */
+.ul{position:absolute;left:30px;right:26px;bottom:14px;height:2px;
+  background:var(--accent);transform:scaleX(0);transform-origin:left;
+  transition:transform .45s cubic-bezier(.16,1,.3,1)}
+.flow .node:first-child .ul{left:0}
+.slide[data-step] .focusable.act .ul{transform:scaleX(1)}
+/* 스텝 진행 표시 — 우하단 페이지 옆 점 */
+.stepdots{position:absolute;right:var(--mx);bottom:92px;z-index:5;display:flex;gap:7px}
+.stepdots i{width:6px;height:6px;border-radius:50%;background:var(--faint);
+  transition:background .3s ease,transform .3s ease}
+.stepdots i.on{background:var(--accent);transform:scale(1.25)}
+
+/* 앰비언트 글로우 — 카드 없이 깊이를 만드는 값싼 수단 */
+.amb{position:absolute;inset:0;z-index:0;pointer-events:none;
+  background:radial-gradient(circle at 86% 14%, var(--accent-soft) 0%, transparent 38%),
+             radial-gradient(circle at 6% 94%, rgba(255,255,255,.018) 0%, transparent 32%);
+  opacity:.55}
+
+/* 스텝별로 바뀌는 tail 문구 */
+.tail .st{display:none}
+.slide[data-step="0"] .tail .st[data-st="0"],
+.slide[data-step="1"] .tail .st[data-st="1"],
+.slide[data-step="2"] .tail .st[data-st="2"]{display:block}
+
+/* 라이트 프로파일 미세 조정 */
+body[data-pal="paper"] .amb, body[data-pal="white"] .amb{opacity:.85}
+body[data-pal="paper"] .deck-brand .mark::after,
+body[data-pal="white"] .deck-brand .mark::after{background:#fff}
+body[data-pal="paper"] .hairgrid, body[data-pal="white"] .hairgrid{opacity:.75}
+
+/* ══════════════════════════════════════════════════════════
+   미디어 장표 — 기존 캡처·영상 자산을 담는 두 가지 방식
+   A) .stage-full : 풀블리드. 영상·풀샷 사진용. 크롬은 페이지만 남긴다
+   B) .shot       : 캡처를 헤어라인 프레임에 격리. 캡처 배경색과 무관하게 안전
+   ══════════════════════════════════════════════════════════ */
+.stage-full{position:absolute;inset:0;z-index:1;overflow:hidden}
+.stage-full>video,.stage-full>img{width:100%;height:100%;object-fit:cover;display:block}
+/* 세로 영상 레터박스는 검정이 아니라 덱 배경색으로 — 캡션이 읽힌다 */
+.stage-full.fit{background:var(--bg-0)}
+.stage-full.fit>video,.stage-full.fit>img{object-fit:contain;background:transparent}
+/* 하단 캡션 — 청중 자막 겸 발표자 큐카드 */
+.mcap{position:absolute;left:0;right:0;bottom:0;z-index:4;
+  padding:0 var(--mx) 74px;
+  background:linear-gradient(to top, rgba(var(--scrim),.97) 26%, rgba(var(--scrim),.72) 58%, rgba(var(--scrim),0) 100%);
+  padding-top:190px}
+.mcap .eyebrow{margin-bottom:20px}
+
+.mcap h2 em{font-style:normal;color:var(--em)}
+.mcap h2{font-size:60px;font-weight:800;line-height:1.14;letter-spacing:-.03em;color:var(--ink);max-width:26ch}
+.mcap p{margin-top:16px;font-size:24px;line-height:1.5;color:var(--body);max-width:52ch}
+/* 미디어 장표에서는 상단 크롬을 지운다 — 화면을 가리지 않게 */
+.slide.media-slide .deck-brand,.slide.media-slide .deck-meta,
+.slide.media-slide .deck-author{opacity:0}
+.slide.media-slide .deck-page{mix-blend-mode:difference;color:#8a8a8a}
+
+/* B) 캡처 격리 — 어떤 톤의 캡처든 프레임 하나로 통일 */
+.shotwrap{display:grid;grid-template-columns:minmax(0,38%) minmax(0,62%);
+  gap:clamp(40px,4vw,80px);align-items:center;flex:1;min-height:0}
+/* 세로 캡처 — 화면 높이를 꽉 채우고 오른쪽 끝까지 흘려보낸다 */
+.slide.shot-bleed .frame{padding-right:0}
+.slide.shot-bleed .shotwrap{grid-template-columns:minmax(0,42%) minmax(0,58%)}
+.shot.bleed{position:absolute;right:0;top:0;bottom:0;height:100vh;height:1080px;
+  width:auto;max-height:none;margin:0;border-radius:0;
+  box-shadow:-1px 0 0 var(--shot-frame), -40px 0 120px rgba(0,0,0,.34)}
+body[data-pal="paper"] .shot.bleed,body[data-pal="white"] .shot.bleed{
+  box-shadow:-1px 0 0 var(--shot-frame), -40px 0 100px rgba(19,19,19,.14)}
+.shot.bleed img{height:1080px;max-height:none;width:auto;max-width:none}
+/* 블리드 장표에서는 우측 크롬을 좌하단으로 모은다 — 캡처 위에 글자 얹지 않는다 */
+.slide.shot-bleed .deck-meta{display:none}
+.slide.shot-bleed .deck-page{right:auto;left:calc(var(--mx) + 330px);bottom:56px}
+.slide.shot-bleed .stepdots{right:auto;left:calc(var(--mx) + 330px);bottom:92px}
+.shot{position:relative;border-radius:10px;overflow:hidden;
+  box-shadow:0 0 0 1px var(--shot-frame), 0 30px 90px rgba(0,0,0,.42);
+  max-height:600px;width:fit-content;max-width:100%;margin-left:auto;display:block}
+body[data-pal="paper"] .shot,body[data-pal="white"] .shot{box-shadow:0 0 0 1px var(--shot-frame),0 24px 64px rgba(19,19,19,.16)}
+.shot img{max-height:600px;max-width:100%;width:auto;height:auto;display:block}
+/* 캡처 아래 자산 라벨 한 줄 — 캡처 위에 겹치지 않는다 */
+.shotbox{display:flex;flex-direction:column;align-items:flex-end;gap:16px;min-width:0}
+.shotlbl{font-family:var(--mono);font-size:15px;letter-spacing:.1em;
+  color:var(--mute);text-transform:uppercase}
+
+/* 소리 있는 영상 — 브라우저 자동재생 정책상 첫 재생은 사람이 눌러야 한다 */
+.playbtn{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);z-index:5;
+  width:132px;height:132px;border-radius:50%;cursor:pointer;
+  border:2px solid var(--accent);background:rgba(var(--scrim),.62);color:var(--accent);
+  font-size:44px;display:flex;align-items:center;justify-content:center;padding-left:.1em;
+  transition:opacity .25s ease,transform .25s ease;backdrop-filter:blur(6px)}
+.playbtn:hover{transform:translate(-50%,-50%) scale(1.06)}
+.playbtn.hide{opacity:0;pointer-events:none}
+/* 소리 없이 재생됐을 때 — 조용히 넘어가지 않고 되돌릴 수단을 남긴다 */
+.playbtn.mini{left:auto;right:var(--mx);top:auto;bottom:210px;transform:none;
+  width:auto;height:auto;border-radius:999px;padding:13px 24px;font-size:19px;
+  font-weight:600;opacity:1;pointer-events:auto;
+  background:var(--accent);color:#fff;border-color:var(--accent)}
+.playbtn.mini:hover{transform:translateY(-2px)}
+.shotbox{display:flex;flex-direction:column;align-items:flex-end;gap:16px;min-width:0}
+.slide.shot-bleed .shotlbl{text-align:left}
+
+/* ══════════════════════════════════════════════════════════
+   v2 레이아웃 — 도식 6종을 카드 없이 다시 짓는다
+   ══════════════════════════════════════════════════════════ */
+
+/* 인용 — 왼쪽 accent 선 + 큰 글 */
+.bigquote{position:relative;padding-left:38px;font-size:64px;font-weight:800;
+  line-height:1.3;letter-spacing:-.03em;color:var(--ink);max-width:26ch}
+.bigquote::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:4px;
+  background:var(--accent);border-radius:2px;transform:scaleY(0);transform-origin:top;
+  transition:transform .6s cubic-bezier(.22,1,.36,1) 120ms}
+.slide.on .bigquote::before{transform:scaleY(1)}
+
+/* 2×3 셀 그리드 — 여섯 번 멈춤 */
+.cellgrid{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr);
+  gap:0}
+.cell{position:relative;padding:34px 40px 40px 0;min-height:190px}
+.cell:nth-child(3n+2),.cell:nth-child(3n){padding-left:40px}
+.cell:nth-child(3n+2)::after,.cell:nth-child(3n)::after{content:"";position:absolute;
+  left:0;top:14px;bottom:14px;width:1px;background:var(--line)}
+.cell:nth-child(n+4)::before{content:"";position:absolute;left:0;right:40px;top:0;height:1px;
+  background:var(--line)}
+.cell .n{font-family:var(--mono);font-size:16px;letter-spacing:.1em;color:var(--mute)}
+.cell .t{font-size:34px;font-weight:600;margin:14px 0 10px;letter-spacing:-.025em;color:var(--ink)}
+.cell .d{font-size:20px;line-height:1.5;color:var(--body)}
+.cell .ul{left:0;right:40px;bottom:16px}
+.slide[data-step] .cell.act .n{color:var(--accent-2)}
+
+/* 좌 텍스트 / 우 이미지 */
+.splitwrap{display:grid;grid-template-columns:minmax(0,44%) minmax(0,56%);
+  gap:clamp(40px,4vw,84px);align-items:center;flex:1;min-height:0}
+.splitpic{display:flex;align-items:center;justify-content:center;min-width:0;height:100%}
+.splitpic img{max-width:100%;max-height:660px;width:auto;height:auto;object-fit:contain;
+  border-radius:8px}
+
+/* 큰 칩 — 모델 이름 나열 */
+.chiprow{display:flex;gap:26px;flex-wrap:wrap}
+.bigchip{position:relative;font-size:42px;font-weight:600;letter-spacing:-.02em;
+  color:var(--ink);padding:14px 4px 22px}
+.bigchip .ul{left:0;right:0;bottom:8px}
+.bigchip+.bigchip{margin-left:14px}
+.chiprow .bigchip::before{content:"·";position:absolute;left:-24px;color:var(--faint)}
+.chiprow .bigchip:first-child::before{content:""}
+
+/* 가로 막대 — 70% */
+.barwrap{max-width:1280px}
+.barlab{font-family:var(--mono);font-size:17px;letter-spacing:.1em;color:var(--mute);
+  text-transform:uppercase;margin-bottom:20px}
+.bartrack{position:relative;height:78px;background:var(--bg-1);border-radius:6px;overflow:hidden;
+  box-shadow:inset 0 0 0 1px var(--line)}
+.barfill{position:absolute;left:0;top:0;bottom:0;width:var(--pct);background:var(--accent);
+  border-radius:6px;transform:scaleX(0);transform-origin:left;
+  transition:transform 1.05s cubic-bezier(.22,1,.36,1) 420ms}
+.slide.on .barfill{transform:scaleX(1)}
+.barfoot{display:flex;align-items:baseline;justify-content:space-between;margin-top:26px}
+.barpct{font-size:118px;font-weight:600;line-height:1;letter-spacing:-.04em;color:var(--num);
+  font-feature-settings:"tnum" 1}
+.barpct small{font-size:52px;color:var(--mute)}
+.barrest{font-size:23px;color:var(--body)}
+
+/* 등식 — 에이전트 = 모델 + 하네스 */
+.eqrow{display:flex;align-items:stretch;gap:34px}
+.eqterm{position:relative;flex:1;padding:26px 30px 40px 0}
+.eqterm .t{font-size:52px;font-weight:600;letter-spacing:-.03em;color:var(--ink)}
+.eqterm .d{margin-top:14px;font-size:21px;line-height:1.5;color:var(--body)}
+.eqterm .ul{left:0;right:30px;bottom:14px}
+.eqop{display:flex;align-items:center;font-size:46px;font-weight:500;color:var(--mute)}
+.slide[data-step] .eqterm.act .t{color:var(--em)}
+
+/* 스펙 목록 — 렌더 사양 */
+.spec{max-width:1180px}
+.specrow{display:flex;align-items:baseline;justify-content:space-between;
+  padding:24px 0;border-bottom:1px solid var(--line)}
+.specrow:first-child{border-top:1px solid var(--line)}
+.specrow .sk{font-size:27px;color:var(--body)}
+.specrow .sv{font-size:44px;font-weight:600;letter-spacing:-.02em;color:var(--ink);
+  font-feature-settings:"tnum" 1}
+.specrow .sv.hl{color:var(--num)}
+
+/* 순환도 — 상상 → 도전 → 경험 → 실력 */
+.cycle{position:relative;width:100%;height:460px;max-width:820px;margin:0 auto}
+.cyring{position:absolute;left:10%;right:10%;top:0;bottom:0;border:1px solid var(--line);
+  border-radius:50%}
+.cyc{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  font-size:44px;font-weight:600;color:var(--em);letter-spacing:-.02em}
+.cyn{position:absolute;transform:translate(-50%,-50%);font-size:27px;font-weight:600;
+  color:var(--ink);background:var(--bg-0);padding:8px 16px;white-space:nowrap}
+
+/* 가로 캡처 — 폭을 꽉 채운다 */
+.shot.wide{width:100%;max-width:100%;margin:0;max-height:620px}
+.shot.wide img{width:100%;height:auto;max-height:620px;object-fit:contain}
+
+/* 마무리 */
+.frame.closing .action-title{color:var(--em);max-width:18ch}
+
+/* 4칸 그리드 — 리스크 네 가지 */
+.slide.grid4 .cellgrid{grid-template-columns:repeat(4,1fr);grid-template-rows:1fr}
+.slide.grid4 .cell:nth-child(n+2){padding-left:36px}
+.slide.grid4 .cell:nth-child(n+2)::after{content:"";position:absolute;left:0;top:14px;bottom:14px;
+  width:1px;background:var(--line)}
+.slide.grid4 .cell::before{content:none}
+.slide.grid4 .cell:nth-child(3n+2)::after,.slide.grid4 .cell:nth-child(3n)::after{left:0}
+
+/* ── 어두운 미디어를 까는 장은 그 장만 다크로 뒤집는다 ──
+   밝은 덱 안에 검은 사각형이 떠 보이는 문제를 구조로 없앤다 */
+.slide.on-dark{
+  --bg-0:#0A0E2E; --bg-1:#101540; --bg-2:#161C4E;
+  --ink:#F2F5FF; --body:#A8B3DC; --mute:#7681B0; --faint:#414A7E;
+  --line:rgba(200,214,255,.12); --line-strong:rgba(200,214,255,.22);
+  --num:#89ABFF; --em:#89ABFF; --accent:#5C8AFF; --accent-2:#89ABFF;
+  --scrim:10,14,46; --grain-blend:overlay;
+  background:var(--bg-0)}
+.slide.on-dark .deck-page b{color:#F2F5FF}
+.slide.on-dark .deck-brand .wm{color:#F2F5FF}
+
+/* ── 인쇄 · PDF 내보내기 (?flat=1 상태에서) ── */
+@page{size:1920px 1080px;margin:0}
+@media print{
+  html,body{width:1920px;height:auto;background:#fff}
+  body.flat #hud{display:none}
+  body.flat .slide{margin:0;break-after:page;page-break-after:always;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .anim,.reveal>span{opacity:1!important;transform:none!important}
+}
+
+/* ── 크기 보정 — 뒷자리에서 읽히게 ── */
+.bigquote{font-size:74px}
+.bigchip{font-size:56px;padding:16px 4px 26px}
+.chiprow{gap:34px}
+.chiprow .bigchip::before{left:-30px;font-size:40px}
+.splitpic img{max-height:760px}
+.cycle{height:540px;max-width:900px}
+.cyc{font-size:54px}
+.cyn{font-size:31px;padding:10px 18px}
+.eqterm .t{font-size:58px}
+.eqop{font-size:52px}
+.slide.grid4 .cell .t{font-size:30px}
+.slide.grid4 .cell .d{font-size:19px}
+.specrow .sk{font-size:29px}
+.specrow .sv{font-size:46px}
+
+/* ══════════════════════════════════════════════════════════
+   실제 화면 지도 — route_plan.json 원본 (6×5 격자 · 지점 18 · 이동 21)
+   경로가 스스로 그려지고, 카메라 점이 그 위를 계속 돈다
+   ══════════════════════════════════════════════════════════ */
+.routemap{width:100%;max-width:1560px;margin:0 auto}
+.routemap svg{width:100%;height:auto;overflow:visible}
+.rg{stroke:var(--line);stroke-width:1}
+.rgrid{opacity:0;transition:opacity .7s ease 80ms}
+.slide.on .rgrid{opacity:1}
+.rline{fill:none;stroke:var(--accent);stroke-width:3;stroke-linejoin:round;
+  stroke-linecap:round;stroke-dasharray:5200;stroke-dashoffset:5200;
+  transition:stroke-dashoffset 2.6s cubic-bezier(.4,0,.2,1) 320ms}
+.slide.on .rline{stroke-dashoffset:0}
+.rwp circle{fill:var(--bg-0);stroke:var(--accent);stroke-width:3;
+  opacity:0;transform:scale(.4);transform-origin:center;transform-box:fill-box;
+  transition:opacity .3s ease,transform .45s cubic-bezier(.34,1.56,.64,1)}
+.slide.on .rwp circle{opacity:1;transform:scale(1);
+  transition-delay:calc(360ms + var(--i) * 130ms)}
+.rwp text{font-family:var(--font);font-size:17px;font-weight:600;fill:var(--body);
+  text-anchor:middle;opacity:0;transition:opacity .4s ease}
+.slide.on .rwp text{opacity:1;transition-delay:calc(420ms + var(--i) * 130ms)}
+.rcam{fill:var(--accent);opacity:0;transition:opacity .5s ease 3s}
+.slide.on .rcam{opacity:.85}
+
+/* ══════════════════════════════════════════════════════════
+   레이아웃별 고유 모션 — 같은 움직임을 두 레이아웃이 쓰지 않는다
+   내용이 하는 동작을 모션이 따라간다
+   ══════════════════════════════════════════════════════════ */
+
+/* flow — 왼쪽에서 오른쪽으로 흐른다. 구간을 지나는 이야기니까 */
+.flow .node.anim-flow{opacity:0;transform:translateX(-26px)}
+.slide.on .flow .node.anim-flow{opacity:1;transform:none;
+  transition:opacity .5s cubic-bezier(.22,1,.36,1) var(--d,0ms),
+             transform .55s cubic-bezier(.22,1,.36,1) var(--d,0ms)}
+
+/* grid(멈춤) — 올라오다 살짝 튕겨서 멈춘다. '멈췄다'는 내용 그대로 */
+.cell.anim-stop{opacity:0;transform:translateY(30px)}
+.slide.on .cell.anim-stop{opacity:1;transform:none;
+  transition:opacity .34s ease var(--d,0ms),
+             transform .62s cubic-bezier(.34,1.4,.5,1) var(--d,0ms)}
+
+/* quote — 말이 튀어나온다. 아래에서 위로, 살짝 오버슛 */
+.bigquote.anim-say>span>span{transform:translateY(112%)}
+.slide.on .bigquote.anim-say>span>span{transform:none;
+  transition:transform .66s cubic-bezier(.28,1.35,.5,1) 180ms}
+
+/* eq — 등식이 쓰이는 순서: 좌변 → 기호 → 우변 */
+.eqterm.anim-eq,.eqop.anim-eq{opacity:0;transform:scale(.9)}
+.slide.on .eqterm.anim-eq,.slide.on .eqop.anim-eq{opacity:1;transform:none;
+  transition:opacity .35s ease var(--d,0ms),
+             transform .5s cubic-bezier(.34,1.4,.5,1) var(--d,0ms)}
+
+/* spec — 줄이 위에서 아래로 하나씩 그어진다 */
+.specrow{overflow:hidden}
+.specrow.anim-row>span{opacity:0;transform:translateY(14px)}
+.slide.on .specrow.anim-row>span{opacity:1;transform:none;
+  transition:opacity .38s ease var(--d,0ms),transform .48s cubic-bezier(.22,1,.36,1) var(--d,0ms)}
+.specrow.anim-row{border-bottom-color:transparent;
+  transition:border-bottom-color .5s ease var(--d,0ms)}
+.slide.on .specrow.anim-row{border-bottom-color:var(--line)}
+
+/* chips — 좌에서 우로 하나씩 튀어오른다 */
+.bigchip.anim-pop{opacity:0;transform:translateY(20px) scale(.94)}
+.slide.on .bigchip.anim-pop{opacity:1;transform:none;
+  transition:opacity .3s ease var(--d,0ms),
+             transform .52s cubic-bezier(.34,1.5,.5,1) var(--d,0ms)}
+
+/* cycle — 원이 그려지고, 점이 원을 따라 돌고, 가운데가 마지막에 커진다 */
+.cycle{position:relative}
+.cyring{border:none}
+.cysvg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.cysvg ellipse{fill:none;stroke:var(--line);stroke-width:1.5;
+  stroke-dasharray:2600;stroke-dashoffset:2600;
+  transition:stroke-dashoffset 1.5s cubic-bezier(.4,0,.2,1) 200ms}
+.slide.on .cysvg ellipse:not(.cyarc){stroke-dashoffset:0}
+.cysvg .cyarc{stroke:var(--accent);stroke-width:3;stroke-linecap:round;
+  stroke-dasharray:100 100;stroke-dashoffset:100;
+  transition:stroke-dashoffset .9s cubic-bezier(.4,0,.2,1)!important}
+/* 5차시 v2: 상시 회전 제거 — 스텝마다 호가 다음 지점까지 그어진다 (deck.js) */
+.cyn{opacity:0;transform:translate(-50%,-50%) scale(.8)}
+.slide.on .cyn{opacity:1;transform:translate(-50%,-50%) scale(1);
+  transition:opacity .34s ease var(--d,0ms),
+             transform .5s cubic-bezier(.34,1.5,.5,1) var(--d,0ms)}
+.cyc{opacity:0;transform:translate(-50%,-50%) scale(.7)}
+.slide.on .cyc{opacity:1;transform:translate(-50%,-50%) scale(1);
+  transition:opacity .4s ease 1.5s,transform .7s cubic-bezier(.34,1.5,.5,1) 1.5s}
+
+/* 미디어 장 — 캡션 스크림이 아래에서 올라온다 */
+.mcap{transform:translateY(26px);opacity:0;
+  transition:transform .7s cubic-bezier(.22,1,.36,1) 220ms,opacity .6s ease 220ms}
+.slide.on .mcap{transform:none;opacity:1}
+
+@media (prefers-reduced-motion:reduce){
+  .rline,.rwp circle,.rwp text,.rcam,.rgrid,.cysvg ellipse,.cysvg .cyarc,
+  .cyn,.cyc,.mcap,.anim-flow,.anim-stop,.anim-say>span>span,.anim-eq,
+  .anim-row>span,.anim-pop{
+    transition:none!important;animation:none!important;
+    opacity:1!important;transform:none!important;stroke-dashoffset:0!important}
+}
+
+/* 실제 렌더 캔버스 지도 + 카메라 창 이동 */
+.mapcam{position:absolute;inset:0;z-index:1;background:#F4F6FA}
+.mapcam svg{width:100%;height:100%;display:block}
+.camrect{fill:none;stroke:#0047AB;stroke-width:3;filter:drop-shadow(0 0 14px rgba(0,71,171,.45))}
+.slide.mapcam-slide .mcap{background:linear-gradient(to top,rgba(244,246,250,.97) 24%,
+  rgba(244,246,250,.72) 56%,rgba(244,246,250,0) 100%)}
+.slide.mapcam-slide .mcap h2,.slide.mapcam-slide .mcap .eyebrow{color:#131313}
+.slide.mapcam-slide .mcap h2 em{color:#0047AB}
+.slide.mapcam-slide .mcap p{color:#43423E}
+.slide.mapcam-slide .deck-page{mix-blend-mode:normal;color:#7A766C}
+
+/* 순환도 — 번호로 방향을 못 박는다 */
+.cyn b{display:block;font-family:var(--mono);font-size:15px;font-weight:600;
+  letter-spacing:.1em;color:var(--accent-2);margin-bottom:4px}
+.cyc{font-size:38px;color:var(--mute);max-width:6em;text-align:center;line-height:1.25}
+
+/* split 이미지가 프레임을 넘던 것 — 남은 높이 안에 가둔다 */
+.splitwrap{align-items:center}
+.splitpic{height:100%;min-height:0;overflow:hidden}
+.splitpic img{max-height:100%;max-width:100%;width:auto;height:auto;object-fit:contain}
+.frame>.splitwrap{flex:1 1 auto;min-height:520px}
+
+/* 사진 위 위치 라벨 — 하나씩 떠오른다 */
+.plabs{position:absolute;inset:0;z-index:3;pointer-events:none}
+.plab{position:absolute;transform:translate(-50%,-50%) scale(.86);
+  font-size:26px;font-weight:600;letter-spacing:-.02em;color:#fff;
+  background:rgba(10,14,30,.72);backdrop-filter:blur(7px);
+  border:1px solid rgba(255,255,255,.22);border-radius:999px;
+  padding:11px 20px;white-space:nowrap;opacity:0;
+  box-shadow:0 8px 26px rgba(0,0,0,.42)}
+.slide.on .plab{opacity:1;transform:translate(-50%,-50%) scale(1);
+  transition:opacity .42s ease calc(var(--i) * 420ms + 700ms),
+             transform .6s cubic-bezier(.34,1.5,.5,1) calc(var(--i) * 420ms + 700ms)}
+.plab::before{content:"";position:absolute;left:-7px;top:50%;width:7px;height:7px;
+  border-radius:50%;background:#5C8AFF;transform:translateY(-50%)}
+/* 순환도 스텝 — 켜진 지점만 또렷하게 */
+.cyn .ul{left:12px;right:12px;bottom:2px}
+.slide[data-step] .cyn.act{color:var(--em)}
+.slide[data-step] .cyn.act b{color:var(--accent)}
+
+/* 사진 세 곳을 한 번에 하나씩 짚고, 마지막에 열두 문장을 한번에 보여준다 */
+.casc{position:absolute;inset:0;z-index:3;pointer-events:none}
+.casc::before{content:"";position:absolute;inset:0;background:rgba(3,8,20,.38)}
+.cascade-slide[data-step] .casc>.focusable{opacity:0;visibility:hidden;filter:none;
+  transition:none}
+.cascade-slide[data-step] .casc>.focusable.act{opacity:1;visibility:visible;filter:none;
+  transition:opacity .26s cubic-bezier(.22,1,.36,1)}
+.cspot{position:absolute;inset:0}
+.cspot svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.cspot path{fill:none;stroke:#8FB4FF;stroke-width:2.5;vector-effect:non-scaling-stroke;
+  filter:drop-shadow(0 2px 8px rgba(0,0,0,.85))}
+.cspot circle{fill:#8FB4FF;stroke:#fff;stroke-width:3;vector-effect:non-scaling-stroke;
+  filter:drop-shadow(0 3px 10px rgba(0,0,0,.9))}
+.cspot circle.pulse{fill:none;stroke:#8FB4FF;stroke-width:2;opacity:.7}
+/* (5차시 v2: 반복 펄스 제거) */
+@keyframes cspot-pulse{0%{r:14;opacity:.9}75%,100%{r:34;opacity:0}}
+.cspot-copy{position:absolute;left:var(--x);top:var(--y);width:var(--w);
+  border-left:3px solid #8FB4FF;padding:4px 0 6px 24px;
+  font-size:40px;font-weight:550;line-height:1.38;letter-spacing:-.025em;color:#fff;
+  text-shadow:0 3px 18px #000,0 1px 4px #000}
+.cspot-copy small{display:block;margin-bottom:12px;font-family:var(--mono);font-size:16px;
+  font-weight:600;letter-spacing:.12em;color:#8FB4FF;text-shadow:0 2px 8px #000}
+.csummary{position:absolute;inset:0;padding:var(--my) var(--mx) 120px;isolation:isolate;
+  display:flex;flex-direction:column;justify-content:center}
+.cscrim{position:absolute;inset:0;z-index:-1;
+  background:linear-gradient(180deg,rgba(6,9,20,.90) 0%,rgba(6,9,20,.86) 70%,
+             rgba(6,9,20,.78) 100%)}
+.csummary .eyebrow{color:#8FB4FF;margin-bottom:22px}
+.casc .eyebrow::before{background:#5C8AFF}
+ol.cs{list-style:none;counter-reset:cs;
+  display:grid;grid-auto-flow:column;grid-template-rows:repeat(6,auto);
+  grid-template-columns:1fr 1fr;gap:0 56px;align-content:center}
+ol.cs li{counter-increment:cs;position:relative;padding-left:48px;
+  font-size:24px;line-height:1.48;color:#EFF3FB;margin:9px 0;
+  opacity:1;transform:none}
+ol.cs li::before{content:counter(cs,decimal-leading-zero);position:absolute;left:0;top:.3em;
+  font-family:var(--mono);font-size:14px;color:#6E8CC8;letter-spacing:.06em}
+
+.action-title em,.mcap h2 em{white-space:nowrap}
+.splitwrap .action-title{max-width:22ch}
+.split-title-wide .splitwrap{grid-template-columns:minmax(0,46%) minmax(0,54%)}
+.split-title-wide .splitwrap .action-title{max-width:23ch}
+.wide-title .action-title.xl{max-width:22ch}
+
+@media (prefers-reduced-motion:reduce){
+  .cspot.act circle.pulse{animation:none!important}
+  .cascade-slide[data-step] .casc>.focusable{transition:none!important}}
+
+/* ══════════════════════════════════════════════════════════
+   5차시 v2 추가분 — 강조색은 장당 한 곳, 상시 반복 모션 없음
+   ══════════════════════════════════════════════════════════ */
+/* 강조색 한 곳: eyebrow 는 무채색. eb-acc 는 예전 덱 호환용으로만 남김(빌더는 더 이상 붙이지 않음) */
+.slide .eyebrow{color:var(--mute)}
+.slide .eyebrow::before{background:var(--faint)}
+.slide.eb-acc .eyebrow{color:var(--accent)}
+.slide.eb-acc .eyebrow::before{background:var(--accent)}
+/* 크롬은 무채색 */
+.deck-brand .mark{background:var(--ink);box-shadow:none}
+.stepdots i.on{background:var(--ink)}
+/* 스텝 초점은 밝기로만 — 번호·라벨을 강조색으로 올리지 않는다 */
+.slide[data-step] .focusable.act .n,.slide[data-step] .focusable.act .k,
+.slide[data-step] .cell.act .n{color:var(--mute)}
+.slide[data-step] .cyn.act{color:var(--ink)}
+.slide[data-step] .cyn.act b{color:var(--mute)}
+/* prog: 0번 스텝에서 전부 흐리게 시작해 하나씩 밝힌다 */
+.slide.prog.on .focusable:not(.act){opacity:.14!important;filter:saturate(.3)}
+.slide.prog .focusable{transition:opacity .42s cubic-bezier(.16,1,.3,1),filter .42s ease!important}
+
+/* 챕터 */
+.chap-k{font-family:var(--mono);font-size:44px;font-weight:600;letter-spacing:.06em;color:var(--mute)}
+.slide.eb-acc .chap-k{color:var(--accent)}
+
+/* 시연 표지판 — 번호를 크게, 무채색으로 */
+.demo-num{position:absolute;right:var(--mx);top:50%;transform:translateY(-54%);z-index:1;
+  font-size:600px;line-height:1;font-weight:300;color:var(--bg-2);pointer-events:none}
+.demo-rule{width:120px;height:2px;background:var(--line-strong)}
+.k-demo .action-title.xl{max-width:17ch}
+
+/* 인용 한 줄 */
+.bigquote.q-sm{font-size:58px;max-width:none}
+.bigquote.q-sm::before{background:var(--ink)}
+
+/* 대비 두 칸 */
+.cmp{display:grid;grid-template-columns:1fr 1fr}
+.cmp-col{position:relative;padding:8px 64px 8px 0}
+.cmp-col+.cmp-col{padding-left:64px}
+.cmp-col+.cmp-col::before{content:"";position:absolute;left:0;top:0;bottom:0;width:1px;background:var(--line-strong)}
+.cmp-col .t{font-size:50px;font-weight:600;letter-spacing:-.03em;line-height:1.2;color:var(--ink)}
+.cmp-col .d{margin-top:18px;font-size:29px;line-height:1.5;color:var(--body)}
+.cmp-col.hl .t{color:var(--em)}
+
+/* 흐름 — 설명 없는 노드 */
+.flow .node.nod .t{font-size:40px;line-height:1.3}
+.flow .node .t{line-height:1.25}
+.flow .node .d{font-size:24px}
+
+/* 거대숫자 — 숫자는 먹색, 결론 한 칸만 강조색 */
+.stat .v{color:var(--ink);flex-wrap:wrap}
+.stat.hl .v{color:var(--num)}
+.stat .k{font-family:var(--font);font-size:24px;letter-spacing:0;text-transform:none;color:var(--body)}
+.stat .v small{font-size:32px;color:var(--body);letter-spacing:-.01em}
+.stat .c{font-size:22px}
+
+/* 순환도 — 제목 왼쪽, 원 오른쪽 */
+.cyclewrap{display:grid;grid-template-columns:minmax(0,36%) minmax(0,64%);gap:40px;align-items:center;flex:1;min-height:0}
+.cyclewrap .action-title{font-size:66px}
+.cyclewrap .cycle{height:720px;max-width:none;width:100%}
+.cyclewrap .cyn{font-size:27px;white-space:normal;width:max-content;max-width:330px;text-align:center;line-height:1.3}
+.cyclewrap .cyn b{font-size:15px}
+
+/* 캡처 장 — 왼쪽 글, 오른쪽 화면 */
+.shotwrap2{display:grid;grid-template-columns:minmax(0,34%) minmax(0,66%);gap:64px;align-items:center;flex:1;min-height:0}
+.shotleft .action-title{font-size:58px;max-width:none}
+.shotleft .subhead{font-size:25px}
+.shotimg{display:flex;align-items:center;justify-content:flex-end;min-width:0;min-height:0;height:100%}
+.shotimg img{max-width:100%;max-height:860px;width:auto;height:auto;display:block;border-radius:10px;
+  box-shadow:0 0 0 1px var(--shot-frame),0 24px 64px rgba(19,19,19,.16)}
+.shotimg.wide{flex:1;justify-content:center}
+.shotimg.wide img{max-height:790px}
+.frame-wide>.spacer:first-of-type{flex:.25}
+.frame-wide>.spacer:last-of-type{flex:.25}
+.shotimg.pending{justify-content:center}
+.pend{width:100%;height:620px;border:2px dashed var(--faint);border-radius:14px;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:18px;background:rgba(19,19,19,.02)}
+.pend b{font-size:48px;font-weight:600;color:var(--mute)}
+.pend span{font-family:var(--mono);font-size:19px;color:var(--mute)}
+.pend .need{font-style:normal;font-size:30px;font-weight:600;color:var(--ink);max-width:28ch;text-align:center;line-height:1.4}
+.sitems{list-style:none}
+.sitems li{padding:16px 0;border-top:1px solid var(--line)}
+.sitems li:last-child{border-bottom:1px solid var(--line)}
+.sitems b{display:block;font-size:25px;font-weight:600;color:var(--ink);line-height:1.35}
+.sitems span{display:block;margin-top:6px;font-size:20px;line-height:1.5;color:var(--body)}
+
+/* 세로 영상 — 오른쪽에 9:16 */
+.k-vside .frame{padding-right:900px}
+.vside{position:absolute;right:220px;top:60px;width:540px;height:960px;z-index:3;border-radius:14px;overflow:hidden;
+  background:#000;box-shadow:0 0 0 1px var(--shot-frame),0 30px 80px rgba(19,19,19,.22)}
+.vside video{width:100%;height:100%;object-fit:cover;display:block}
+.k-vside .deck-meta{display:none}
+.soundbtn{position:absolute;left:50%;bottom:26px;transform:translateX(-50%);z-index:2;cursor:pointer;
+  font-family:var(--font);font-size:20px;font-weight:600;color:#fff;background:rgba(19,19,19,.72);
+  border:1px solid rgba(255,255,255,.35);border-radius:999px;padding:12px 26px;backdrop-filter:blur(6px);
+  transition:opacity .25s ease}
+.soundbtn.hide{opacity:0;pointer-events:none}
+
+/* 카드뉴스 8장 한눈에 */
+.cards8{display:grid;grid-template-columns:repeat(4,auto);gap:28px 30px;justify-content:center}
+.card img{height:365px;width:auto;display:block;border-radius:8px;
+  box-shadow:0 0 0 1px var(--shot-frame),0 16px 40px rgba(19,19,19,.14)}
+.card.anim-stop{opacity:0;transform:translateY(30px)}
+.slide.on .card.anim-stop{opacity:1;transform:none;
+  transition:opacity .34s ease var(--d,0ms),transform .62s cubic-bezier(.34,1.4,.5,1) var(--d,0ms)}
+
+/* 카드뉴스 한 장씩 */
+.cstepwrap{display:grid;grid-template-columns:minmax(0,46%) minmax(0,54%);gap:48px;align-items:center;flex:1;min-height:0}
+.cstack{position:relative;height:870px}
+.cbig{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+.cbig img{height:860px;width:auto;border-radius:10px;box-shadow:0 0 0 1px var(--shot-frame),0 24px 64px rgba(19,19,19,.18)}
+.k-cardsteps .cbig.focusable{opacity:0!important;filter:none!important;transition:opacity .35s ease!important}
+.k-cardsteps .cbig.focusable.act{opacity:1!important}
+.thumbs{display:flex;gap:12px;flex-wrap:wrap}
+.thumbs .th img{height:104px;width:auto;display:block;border-radius:4px;opacity:.35;transition:opacity .3s ease}
+.thumbs .th{border-radius:6px;outline:2px solid transparent;outline-offset:3px;transition:outline-color .3s ease}
+.thumbs .th.cur{outline-color:var(--accent)}
+.thumbs .th.cur img{opacity:1}
+
+/* 봉인 */
+.k-closing .action-title.xl{max-width:22ch}
+@media (prefers-reduced-motion:reduce){.card.anim-stop{opacity:1!important;transform:none!important}}
+
+/* 가로로 긴 캡처 — 제목 줄 + 폭 가득 화면 */
+.shotstack{display:flex;flex-direction:column;flex:1;min-height:0}
+.stacktop{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:64px;align-items:end;margin-bottom:34px}
+.stacktop .action-title{font-size:54px;max-width:none}
+.stackright .subhead{font-size:24px;max-width:none}
+.stackright .sitems{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:28px}
+.stackright .sitems li,.stackright .sitems li:last-child{border-bottom:none;padding:12px 0 0}
+.stackright .sitems b{font-size:21px}
+.stackright .sitems span{font-size:17px}
+.shotimg.stack{flex:1;min-height:0;justify-content:center;height:auto}
+.shotimg.stack img{max-height:100%;max-width:100%;object-fit:contain}
+.shotimg.stack .pend{height:100%}
+/* 카드 한 장씩 — 카드는 오른쪽에 고정 배치 */
+.cstepwrap{grid-template-columns:minmax(0,52%) 1fr}
+.cstack{position:absolute;right:var(--mx);top:110px;bottom:110px;width:688px;height:auto;z-index:2}
+.cbig img{height:100%;max-height:860px}
+.k-cardsteps .frame{padding-right:900px}
+.k-cardsteps .deck-meta{display:none}
+.thumbs .th img{height:92px}
+/* 표지판 번호 위치 보정 · 순환도 높이 */
+.demo-num{font-size:540px;top:50%;transform:translateY(-78%)}
+.cyclewrap .cycle{height:640px}
+.shotimg.stack img{max-height:700px;max-width:100%;width:auto;height:auto}
+.shotimg.stack .pend{height:680px}
+.k-cardsteps .cstepwrap{display:block}
+.k-cardsteps .shotleft .action-title{font-size:62px}
+.cyclewrap .cyn{max-width:400px}
+.shotimg.stack{flex:none;height:auto}
+.shotimg.stack img{max-height:650px}
+.shotimg.stack .pend{height:650px}
+.frame-wide{padding-top:120px}
+.frame-wide>.spacer:first-of-type,.frame-wide>.spacer:last-of-type{flex:0}
+.shotstack{justify-content:center}
+.shotimg.stack img{max-height:620px}
+.shotimg.stack .pend{height:620px}
+.shotimg.wide img{max-height:800px}
+.slide[data-step] .cmp-col.hl.act .t{color:var(--em)}
+
+/* ── 2026-11-13 1-A 빨간 박스 → 확대 · 따라하기 화면 꽉 차게 · 시중 서비스 · 달력 ── */
+.bxw{position:relative;display:inline-block;line-height:0;max-width:100%}
+.bxw img{max-width:100%}
+.bx{position:absolute;border:7px solid #E5322D;border-radius:14px;box-shadow:0 0 0 8px rgba(229,50,45,.18);pointer-events:none}
+.bxn{position:absolute;left:-62px;top:-62px;width:52px;height:52px;border-radius:50%;background:#E5322D;color:#fff;font:800 30px/52px var(--font);text-align:center}
+.zoomimg{flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
+.zoomimg img{border:7px solid #E5322D;border-radius:12px;box-shadow:0 0 0 8px rgba(229,50,45,.15);display:block}
+.slide.k-screen .deck-brand,.slide.k-screen .deck-meta,.slide.k-screen .deck-author,.slide.k-screen .deck-page{display:none}
+.scr{position:absolute;inset:0;z-index:3;background:#fff}
+.scr img{width:100%;height:100%;object-fit:contain;display:block}
+.mk-b{flex:1;min-height:0;display:flex;gap:64px;align-items:center}
+.mk-vis{flex:0 0 60%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:0}
+.mk-wrap{position:relative;height:calc(100% - 44px);display:flex;justify-content:center}
+.mk-img{height:100%;max-width:100%;object-fit:contain;border-radius:12px;border:1px solid var(--faint)}
+.mk-tag{position:absolute;right:-18px;bottom:-18px;background:var(--accent);color:#fff;font-weight:800;font-size:40px;padding:10px 24px;border-radius:12px;white-space:nowrap}
+.mk-src{margin-top:34px;font-size:22px;color:var(--mute)}
+.mk-side{flex:1;display:flex;flex-direction:column;gap:20px}
+.mk-side b{display:block;font-size:42px;font-weight:800;letter-spacing:-.03em;color:var(--ink);margin-bottom:8px}
+.mk-side span{display:block;font-size:30px;line-height:1.45;color:var(--body)}
+.mk-s2 b{color:var(--em)}
+.mk-ar{font-size:52px;color:var(--accent);font-weight:800}
+.cal-leg{display:flex;gap:28px;font-size:24px;color:var(--mute);justify-content:flex-end;margin-bottom:12px}
+.cal-leg span::before{content:"";display:inline-block;width:22px;height:22px;border-radius:5px;margin-right:8px;vertical-align:-3px}
+.lg-today::before{background:var(--ink)}.lg-class::before{background:var(--accent)}.lg-span::before{background:var(--accent-soft);border:2px solid var(--accent)}
+.cal{flex:1;min-height:0;display:grid;grid-template-columns:repeat(7,1fr);grid-template-rows:40px repeat(var(--wk,5),minmax(0,1fr));gap:10px}
+.cal-h{font-size:24px;font-weight:700;color:var(--mute);text-align:center;align-self:end}
+.cal-d{min-height:0;overflow:hidden;border:1px solid var(--faint);border-radius:12px;padding:8px 14px;font-size:24px;font-weight:600;color:var(--mute);display:flex;flex-direction:column}
+.cal-d.off{border:0}
+.cal-d i{font-style:normal;font-size:26px;font-weight:800;line-height:1.15;margin-top:2px}
+.cal-d.today{background:var(--ink);color:var(--paper,#F7F4EC);border-color:var(--ink)}
+.cal-d.class{background:var(--accent);color:#fff;border-color:var(--accent)}
+.cal-d.span{background:var(--accent-soft);color:var(--ink);border-color:var(--accent)}

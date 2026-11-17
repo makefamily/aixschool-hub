@@ -1,0 +1,4 @@
+interface:
+  display_name: "아토믹 디자인 적용"
+  short_description: "모든 UI/UX 작업에 아토믹 디자인 원칙을 체계적으로 적용"
+  default_prompt: "Use $apply-atomic-design to design or review this UI as a reusable, resilient system."

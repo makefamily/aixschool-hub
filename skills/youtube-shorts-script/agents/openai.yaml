@@ -1,0 +1,4 @@
+interface:
+  display_name: "YouTube Shorts Script"
+  short_description: "유튜브 영상 분석 기반 한국어 쇼츠 스크립트 작성 도우미"
+  default_prompt: "Use -shorts-script to analyze an attached YouTube video and write a Korean Shorts script."

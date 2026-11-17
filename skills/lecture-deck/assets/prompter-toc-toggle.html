@@ -1,0 +1,12 @@
+<!-- 프롬프터 목차 숨기기
+  1) 타이머 바 버튼 줄 끝에:  <button id="navtoggle">목차</button>
+  2) 목차 nav 를:             <nav id="toc" hidden> ... </nav>
+  3) CSS 에 반드시 추가: nav[hidden]{display:none!important}  (nav{display:flex} 가 hidden 을 덮어써서 안 숨겨짐 — 11-04 실제 사고)
+  4) </body> 바로 앞에 아래 script 를 넣는다
+  기본은 숨김, '목차'를 누르면 펼침, 목차 링크를 누르면 다시 접힘, 상태는 localStorage 에 기억 -->
+<style>nav[hidden]{display:none!important}</style>
+<script>(function(){var n=document.getElementById("toc"),b=document.getElementById("navtoggle");if(!n||!b)return;
+function s(o){n.hidden=!o;b.textContent=o?"목차 접기":"목차";try{localStorage.setItem("prompterToc",o?"1":"0")}catch(e){}}
+var o=false;try{o=localStorage.getItem("prompterToc")==="1"}catch(e){}s(o);
+b.addEventListener("click",function(){s(n.hidden)});
+n.addEventListener("click",function(e){if(e.target.tagName==="A")s(false)});})();</script>

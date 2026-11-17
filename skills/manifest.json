@@ -1,0 +1,727 @@
+{
+  "version": 1,
+  "updated": "2026-11-17",
+  "skills": [
+    {
+      "name": "chief-of-staff",
+      "desc": "총괄 비서: 직원을 골라 순서대로 맡기고 결과를 한 번에",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [],
+      "note": ""
+    },
+    {
+      "name": "lecture-deck",
+      "desc": "강의·발표 덱과 진행 프롬프터 만들기",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [],
+      "note": "덱 검사기는 Python(있으면)"
+    },
+    {
+      "name": "video-studio",
+      "desc": "촬영본 컷 편집·자막·쇼츠, 코드로 모션그래픽 만들기",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "python",
+        "ffmpeg",
+        "node"
+      ],
+      "note": "코드 영상은 Node와 크롬 또는 엣지 필요, 받아쓰기는 맥 Apple Silicon에서 바로"
+    },
+    {
+      "name": "apply-atomic-design",
+      "desc": "화면·페이지 설계(부품부터 화면까지)",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [],
+      "note": ""
+    },
+    {
+      "name": "frontend-design",
+      "desc": "웹 화면 디자인 기준",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [],
+      "note": "Apache-2.0"
+    },
+    {
+      "name": "detail-page",
+      "desc": "상품 상세페이지·썸네일 만들기",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "python"
+      ],
+      "note": "이미지로 뽑을 때 Edge·Chrome 필요"
+    },
+    {
+      "name": "dropshipping-pipeline",
+      "desc": "상품 발굴 → 상세 개선 → 광고 소재",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [],
+      "note": "유료 이미지 생성은 확인 후"
+    },
+    {
+      "name": "marketing-advisor",
+      "desc": "카피·오퍼·랜딩 3렌즈 점검",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [],
+      "note": ""
+    },
+    {
+      "name": "youtube-shorts-script",
+      "desc": "쇼츠·릴스 대본",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [],
+      "note": ""
+    },
+    {
+      "name": "cafe-column-cardnews",
+      "desc": "칼럼 → 카드뉴스 10장",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [],
+      "note": ""
+    },
+    {
+      "name": "humanize-scan",
+      "desc": "글의 AI 티 점검과 고친 표본",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [],
+      "note": ""
+    },
+    {
+      "name": "korean-docs",
+      "desc": "한글(HWP/HWPX) 서식 읽기·채우기",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "python"
+      ],
+      "note": "python-hwpx"
+    },
+    {
+      "name": "verify-implementation",
+      "desc": "만든 것 직접 점검",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [],
+      "note": ""
+    },
+    {
+      "name": "red-team",
+      "desc": "만든 것의 약점 찾기",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [],
+      "note": ""
+    },
+    {
+      "name": "find-skills",
+      "desc": "공개 스킬 찾기",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "node"
+      ],
+      "note": ""
+    },
+    {
+      "name": "content-editor",
+      "desc": "내 자료로 원고 초안",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [],
+      "note": ""
+    },
+    {
+      "name": "blog-marketer",
+      "desc": "블로그 글·사진·꾸미기·네이버 임시저장까지",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "python"
+      ],
+      "note": "Aside 기본, 없으면 크롬/엣지+Playwright 대안. 로그인·발행은 학생이 직접"
+    },
+    {
+      "name": "cafe-writer",
+      "desc": "카페 소개·공지 글",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [],
+      "note": ""
+    },
+    {
+      "name": "ebook-editor",
+      "desc": "전자책 목차·원고·PDF",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [],
+      "note": ""
+    },
+    {
+      "name": "youtube-channel-manager",
+      "desc": "유튜브 제목·설명·업로드 정리",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [],
+      "note": ""
+    },
+    {
+      "name": "openchat-manager",
+      "desc": "톡방 공지·소식·문의 답변 초안",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [],
+      "note": ""
+    },
+    {
+      "name": "shop-cs-desk",
+      "desc": "고객 문의 답변 초안",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [],
+      "note": ""
+    },
+    {
+      "name": "order-shipping-desk",
+      "desc": "주문·출고 정리표",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [],
+      "note": ""
+    },
+    {
+      "name": "daily-assistant",
+      "desc": "오늘 할 일 정리",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [],
+      "note": ""
+    },
+    {
+      "name": "ops-manager",
+      "desc": "우선순위·주간 정리·숫자 보고",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [],
+      "note": ""
+    },
+    {
+      "name": "automation-monitor",
+      "desc": "자동화·예약 작업 점검",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [],
+      "note": ""
+    },
+    {
+      "name": "sns-writer",
+      "desc": "스레드 글 쓰기와 게시",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "node"
+      ],
+      "note": "Threads 토큰(설정 › 연결)"
+    },
+    {
+      "name": "cardnews-maker",
+      "desc": "카드뉴스 기획표부터 이미지(PNG), 10장 모아보기, ZIP까지",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "python"
+      ],
+      "note": "크롬 또는 엣지 필요. AI 그림 배경(선택)은 Codex 로그인, 구독 한도 사용"
+    },
+    {
+      "name": "hyperframes",
+      "desc": "HTML로 영상 만들기(런치·설명·차트·세로 클립)",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "node",
+        "ffmpeg"
+      ],
+      "note": "Node 22 이상, Apache-2.0"
+    },
+    {
+      "name": "motion-graphics",
+      "desc": "10초 안팎 글자·숫자·차트 모션그래픽",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "node"
+      ],
+      "note": "하이퍼프레임 사용. 음성·이미지 생성은 본인 키가 있을 때만"
+    },
+    {
+      "name": "general-video",
+      "desc": "길거나 여러 장면인 영상 만들기",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "node"
+      ],
+      "note": "하이퍼프레임 사용"
+    },
+    {
+      "name": "faceless-explainer",
+      "desc": "얼굴 없는 설명 영상",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "node"
+      ],
+      "note": "하이퍼프레임 사용"
+    },
+    {
+      "name": "awwwards-animations",
+      "desc": "웹 애니메이션 기법 참고",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "node"
+      ],
+      "note": "참고용, MIT"
+    },
+    {
+      "name": "aside-browser",
+      "desc": "로그인된 내 브라우저(Aside)에서 사이트 조작",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [],
+      "note": "Aside 설치와 가입 필요, 로그인·결제·발행은 학생이 직접"
+    },
+    {
+      "name": "blog-checker",
+      "desc": "블로그 원고 키워드·광고어 점검, 붙여넣기 정리본",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "python"
+      ],
+      "note": ""
+    },
+    {
+      "name": "cafe-schedule",
+      "desc": "카페 글 발행 예약표·금지어 점검",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "python"
+      ],
+      "note": ""
+    },
+    {
+      "name": "cafe-welcome",
+      "desc": "가입인사 환영 댓글 목록",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "python"
+      ],
+      "note": ""
+    },
+    {
+      "name": "cut-list",
+      "desc": "자막으로 컷 리스트·정리 자막",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "python"
+      ],
+      "note": "영상까지 자를 때 ffmpeg"
+    },
+    {
+      "name": "fix-playbook",
+      "desc": "문제 신고 조치 카드·담당자 전달문",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "python"
+      ],
+      "note": ""
+    },
+    {
+      "name": "job-watch",
+      "desc": "자동화 멈춤·실패 판정과 알림 문안",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "python"
+      ],
+      "note": ""
+    },
+    {
+      "name": "kakao-notice",
+      "desc": "톡방 공지 발송 시간표·복사 문안",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "python"
+      ],
+      "note": ""
+    },
+    {
+      "name": "news-digest",
+      "desc": "오늘의 글감 보드",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "python"
+      ],
+      "note": ""
+    },
+    {
+      "name": "order-notice",
+      "desc": "주문 안내문 만들기·검수",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "python"
+      ],
+      "note": ""
+    },
+    {
+      "name": "reels-planner",
+      "desc": "릴스 자막·캡션·해시태그",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "python"
+      ],
+      "note": ""
+    },
+    {
+      "name": "reference-picker",
+      "desc": "잘된 영상에서 기획 후보 고르기",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "python"
+      ],
+      "note": ""
+    },
+    {
+      "name": "sales-report",
+      "desc": "주문 파일로 매출 보고",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "python"
+      ],
+      "note": ""
+    },
+    {
+      "name": "ship-file",
+      "desc": "택배 업로드 파일·송장 변환",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "python"
+      ],
+      "note": ""
+    },
+    {
+      "name": "shorts-cutter",
+      "desc": "긴 영상에서 숏폼 후보 선별",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "python"
+      ],
+      "note": "영상까지 자를 때 ffmpeg"
+    },
+    {
+      "name": "threads-schedule",
+      "desc": "스레드 발행 예약표·글자 수 점검",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "python"
+      ],
+      "note": ""
+    },
+    {
+      "name": "utm-links",
+      "desc": "링크 꼬리표와 채널 성적표",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "python"
+      ],
+      "note": ""
+    },
+    {
+      "name": "youtube-reply",
+      "desc": "댓글 답글 초안",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "python"
+      ],
+      "note": ""
+    },
+    {
+      "name": "longform-shorts",
+      "desc": "유튜브 링크로 쇼츠 만들기(구간·헤드카피·렌더·검수, 선택 업로드)",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "python",
+        "ffmpeg"
+      ],
+      "note": "yt-dlp·whisper 필요. 윈도우는 일부 기능 제한. 업로드는 유튜브 연결"
+    },
+    {
+      "name": "youtube-thumbnail-ab",
+      "desc": "썸네일·제목 A/B 3안",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "python"
+      ],
+      "note": "크롬 또는 엣지"
+    },
+    {
+      "name": "naver-cafe-writer",
+      "desc": "카페 글·이미지 배치·원고 검사",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "python"
+      ],
+      "note": ""
+    },
+    {
+      "name": "utm-link",
+      "desc": "채널별 UTM 링크 만들기",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "python"
+      ],
+      "note": ""
+    },
+    {
+      "name": "content-repurpose",
+      "desc": "원본 하나를 카페·숏폼·카드뉴스·스레드로 나누기",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [],
+      "note": ""
+    },
+    {
+      "name": "reels-style-router",
+      "desc": "릴스 스타일 고르기·편집 계획·자막 미리보기",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "python",
+        "ffmpeg"
+      ],
+      "note": ""
+    },
+    {
+      "name": "reels-info-visual",
+      "desc": "정보 시각화형 릴스 편집 규칙",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "python",
+        "ffmpeg"
+      ],
+      "note": ""
+    },
+    {
+      "name": "reels-claim-numbers",
+      "desc": "주장·숫자·사례형 릴스 편집 규칙",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "python",
+        "ffmpeg"
+      ],
+      "note": ""
+    },
+    {
+      "name": "reels-tool-demo",
+      "desc": "AI·도구 설명형 릴스 편집 규칙",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "python",
+        "ffmpeg"
+      ],
+      "note": ""
+    },
+    {
+      "name": "reel-reference-edit",
+      "desc": "메모지형 모션그래픽 4K 세로 릴스",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "node",
+        "ffmpeg"
+      ],
+      "note": "Node 22 이상, 하이퍼프레임"
+    },
+    {
+      "name": "vlog-reference-edit",
+      "desc": "여러 클립 브이로그형 4K 릴스",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "node",
+        "ffmpeg"
+      ],
+      "note": "Node 22 이상, 하이퍼프레임"
+    },
+    {
+      "name": "ai-school-video-edit",
+      "desc": "낭독 촬영본 숏폼 편집(기본형+5스타일)",
+      "os": [
+        "mac",
+        "windows"
+      ],
+      "requires": [
+        "node",
+        "ffmpeg"
+      ],
+      "note": "Node 22 이상, 하이퍼프레임"
+    }
+  ]
+}
