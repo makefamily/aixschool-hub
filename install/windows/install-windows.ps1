@@ -17,6 +17,11 @@ if (-not (Need node)) {
   exit 1
 }
 
+# 0) 허브 앱이 켜져 있으면 끈다(켜진 채로는 hub 폴더를 바꿀 수 없다)
+Get-Process aixschool-hub -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like "*$HubHome\hub\*" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+Start-Sleep -Seconds 2
+
 # 1) 허브 코드: 묶음의 hub 폴더를 그대로 옮긴다(이전 설치가 있으면 코드만 바꾸고 작업·설정은 남긴다)
 New-Item -ItemType Directory -Force $HubHome | Out-Null
 if (Test-Path "$HubHome\hub.new") { Remove-Item -Recurse -Force "$HubHome\hub.new" }

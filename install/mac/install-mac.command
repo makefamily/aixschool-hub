@@ -18,6 +18,11 @@ if ! need node; then
   exit 1
 fi
 
+# 0) 허브 앱이 켜져 있으면 끈다(새 코드로 다시 켜지게)
+pkill -x aixschool-hub 2>/dev/null || true
+pkill -f "$HUB_HOME/hub/app/server.mjs" 2>/dev/null || true
+sleep 1
+
 # 1) 허브 코드: 묶음의 hub 폴더를 그대로 옮긴다(이전 설치가 있으면 코드만 바꾸고 작업·설정은 남긴다)
 mkdir -p "$HUB_HOME"
 rm -rf "$HUB_HOME/hub.new"
