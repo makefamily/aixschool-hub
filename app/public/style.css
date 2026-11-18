@@ -241,3 +241,9 @@ ul.mylist{list-style:none;margin:8px 0 0;display:flex;flex-direction:column;gap:
 .keyrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}.keyrow label{font-size:12.5px;color:var(--ink3);min-width:110px}.keyrow .field{flex:1;min-width:200px}
 
 .card.chief{border-color:var(--accent-line);background:var(--accent-soft);margin-bottom:8px}.card.chief p{font-size:14px;color:var(--ink2)}.card.chief .q{font-size:12.5px;color:var(--ink3);margin-top:6px}
+
+.updbar{display:flex;align-items:center;gap:10px;min-height:44px;padding:6px 16px;background:var(--accent-soft);border-bottom:1px solid var(--accent-line);font-size:13px;flex:none;flex-wrap:wrap}
+.updbar b{font-weight:600}
+.updbar .updnote{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:520px;min-width:0}
+.updbar .sp{flex:1}
+.updbar .ink3{color:var(--ink3)}

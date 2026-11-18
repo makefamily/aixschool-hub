@@ -7,9 +7,12 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { REPO } from './lib.mjs';
 
+// 태그로 만들 때는 태그와 VERSION 파일이 같아야 한다(다르면 업데이트 확인이 엉킨다)
+const VERSION = fs.readFileSync(path.join(REPO, 'VERSION'), 'utf8').trim();
+if (process.env.GITHUB_REF_NAME?.startsWith('v') && process.env.GITHUB_REF_NAME !== `v${VERSION}`) throw new Error(`태그 ${process.env.GITHUB_REF_NAME} 와 VERSION ${VERSION} 이 달라요`);
 const want = process.argv.slice(2).length ? process.argv.slice(2) : ['mac', 'windows'];
 const OUT = path.join(REPO, 'release');
-const HUB_FILES = ['AGENTS.md', 'CLAUDE.md', 'README.md', 'app', 'skills', 'tools/lib.mjs', 'tools/setup.mjs', 'tools/skills-sync.mjs', 'tools/skill-register.mjs', 'tools/keys.mjs', 'docs/open-source.md'];
+const HUB_FILES = ['AGENTS.md', 'CLAUDE.md', 'README.md', 'app', 'skills', 'tools/lib.mjs', 'tools/setup.mjs', 'tools/skills-sync.mjs', 'tools/skill-register.mjs', 'tools/keys.mjs', 'tools/update.mjs', 'VERSION', 'docs/open-source.md'];
 const skip = (s) => /[\\/](__pycache__|node_modules|\.git)([\\/]|$)|\.DS_Store$|\.bak/.test(s);
 
 function stageHub(dst) {

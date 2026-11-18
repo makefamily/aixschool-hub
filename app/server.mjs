@@ -11,6 +11,7 @@ import { REPO, PLATFORM, hubHome, codexHome, workRoot, codexCommand, codexEnv, c
 import * as keys from '../tools/keys.mjs';
 import * as learn from './learn.mjs';
 import * as sess from './sessions.mjs';
+import * as upd from '../tools/update.mjs';
 
 // 허브를 다른 AI 창(Orca·Claude Code 터미널)에서 켰을 때 따라온 그 창의 표시를 지운다.
 // 남겨 두면 허브가 돌린 대화가 사람이 연 대화처럼 기록되고, 하던 일 목록에 섞인다.
@@ -488,6 +489,17 @@ const server = http.createServer(async (req, res) => {
     if ((m = p.match(/^\/api\/tasks\/([\w-]+)\/delete$/)) && req.method === 'POST') { if (running.has(m[1])) return json(res, 409, { ok: false, msg: 'AI가 일하는 중이에요. 멈춘 뒤 지워 주세요' }); fs.rmSync(tfile(m[1]), { force: true }); return json(res, 200, { ok: true }); }
     if ((m = p.match(/^\/api\/tasks\/([\w-]+)\/reveal$/)) && req.method === 'POST') { const b = await body(req); const t = readTask(m[1]); return json(res, 200, reveal(t.cwd, b.what === 'terminal' ? 'terminal' : 'folder')); }
     if (p === '/api/reveal' && req.method === 'POST') { const b = await body(req); return json(res, 200, reveal(workRoot(), b.what === 'terminal' ? 'terminal' : 'folder')); }
+    // 업데이트: 확인(앱 열 때) · 적용(버튼). 적용이 끝나면 새 코드로 서버를 다시 켠다
+    if (p === '/api/update' && req.method === 'GET') return json(res, 200, { ...(await upd.check(url.searchParams.get('force') === '1')), updating: updating || null });
+    if (p === '/api/update' && req.method === 'POST') {
+      if (updating) return json(res, 409, { ok: false, msg: '이미 업데이트하는 중이에요' });
+      if (running.size) return json(res, 409, { ok: false, msg: 'AI가 일하는 중이에요. 끝난 뒤에 업데이트해 주세요' });
+      updating = '시작';
+      const step = (t) => { updating = t; console.log(`[업데이트] ${t}`); emit({ type: 'update', step: t }); };
+      upd.apply(step).then((v) => { step(`v${v} 적용 끝, 다시 켜는 중`); emit({ type: 'update', step: 'restart', version: v }); setTimeout(restartSelf, 600); })
+        .catch((e) => { updating = null; console.error('[업데이트 실패]', e); emit({ type: 'update', step: 'fail', msg: String(e.message || e) }); });
+      return json(res, 200, { ok: true });
+    }
     // 내 자료 채운 정도
     if (p === '/api/my') return json(res, 200, myStatus());
     if (p === '/api/my/reveal' && req.method === 'POST') { ensureMy(); return json(res, 200, reveal(myDir(), 'folder')); }
@@ -592,9 +604,23 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(404); res.end('없음');
   } catch (e) { console.error(`[오류] ${req.method} ${p} · ${e.stack || e}`); json(res, 500, { ok: false, msg: String(e.message || e) }); }
 });
+// 업데이트 뒤 새 코드로 다시 켜기: 새 서버를 따로 띄우고 지금 서버는 끝낸다.
+// 새 서버는 앱이 직접 켠 것이 아니라서, 화면 연결이 1분 넘게 없으면 스스로 꺼진다(앱을 닫으면 같이 끝나게).
+let updating = null;
+function restartSelf() {
+  const log = fs.openSync(path.join(hubHome(), 'hub.log'), 'a');
+  const c = spawn(process.execPath, [path.join(REPO, 'app', 'server.mjs')], { cwd: REPO, env: { ...process.env, AIHUB_HOME: hubHome(), AIHUB_IDLE_EXIT: '1' }, detached: true, stdio: ['ignore', log, log], windowsHide: true });
+  c.unref();
+  server.close(); for (const r of clients) { try { r.end(); } catch {} }
+  setTimeout(() => process.exit(0), 300);
+}
+if (process.env.AIHUB_IDLE_EXIT) {
+  let idle = 0;
+  setInterval(() => { idle = clients.size || running.size || updating ? 0 : idle + 15; if (idle >= 60) { console.log('[AI 학교 허브] 화면이 닫혀 서버를 끝냄'); process.exit(0); } }, 15000).unref();
+}
 let listenTries = 0;
 server.on('error', (e) => { if (e.code === 'EADDRINUSE' && listenTries++ < 40) return setTimeout(() => server.listen(PORT, '127.0.0.1'), 500); console.error('[AI 학교 허브] 서버를 열지 못함', e); process.exit(1); });
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`[AI 학교 허브] 실행 · http://127.0.0.1:${PORT} · 허브 폴더 ${hubHome()} · pid ${process.pid}`);
+  console.log(`[AI 학교 허브] v${upd.currentVersion()} 실행 · http://127.0.0.1:${PORT} · 허브 폴더 ${hubHome()} · pid ${process.pid}`);
   try { const pc = pcCheck(); console.log(`[이 PC] 사용자 폴더 ${pc.home}${pc.oddHome ? ' (띄어쓰기·한글 있음 → AI를 직접 실행)' : ''} · Claude ${pc.claude.how} ${pc.claude.path} · Codex ${pc.codex.how}`); } catch {}
 });

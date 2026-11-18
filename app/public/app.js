@@ -77,6 +77,15 @@ function topbar() {
   <button class="me" data-act="settings" data-tab="me">${esc(S.st.me || '이름')}</button></div></div>`;
 }
 
+// ── 업데이트 띠: 새 버전이 있을 때만 위 줄 아래에 뜬다 ──
+function updBar() {
+  const u = S.upd; if (!u) return '';
+  if (u.updating) return `<div class="updbar"><span class="dot work"></span><span>업데이트 중 · ${esc(u.updating)}</span><span class="sp"></span><span class="ink3">끝나면 화면이 저절로 새로 열려요</span></div>`;
+  if (!u.available || S.updHide === u.latest) return '';
+  const first = (u.notes || '').split('\n').map((l) => l.replace(/^[-*\s]+/, '').trim()).find(Boolean) || '';
+  return `<div class="updbar"><span>새 버전 <b class="num">v${esc(u.latest)}</b>이 나왔어요</span>${first ? `<span class="ink3 updnote" title="${esc(u.notes)}">${esc(first)}</span>` : ''}<span class="sp"></span><button class="btn" data-act="updlater">나중에</button><button class="btn pri" data-act="update">업데이트</button></div>`;
+}
+
 // ── 오늘 ──
 function todayView() {
   const working = S.st.tasks.filter((t) => t.status === 'working');
@@ -277,7 +286,7 @@ function sbHtml() {
   const parts = [];
   if (!a || a.codex) parts.push(u && u.weekly != null ? `<span class="mt">Codex 이번 주 ${bar(u.weekly)}<b class="num">${u.weekly}%</b> 씀${day(u.weeklyReset)}</span>` : '<span>Codex 사용량 확인 중…</span>');
   if (!a || a.claude) parts.push(cl && (cl.weekly != null || cl.fiveHour != null) ? `<span class="mt">Claude 이번 주 ${bar(cl.weekly ?? 0)}<b class="num">${cl.weekly ?? 0}%</b> 씀${day(cl.weeklyReset)}</span>` : '<span>Claude 사용량 확인 중…</span>');
-  return `${parts.join('')}<span class="sp"></span><span>AI 학교 허브</span>`;
+  return `${parts.join('')}<span class="sp"></span><span>AI 학교 허브${S.upd?.current && S.upd.current !== 'dev' ? ` v${esc(S.upd.current)}` : ''}</span>`;
 }
 function renderSB() { const el = $('#sb'); if (el) el.innerHTML = sbHtml(); }
 
@@ -303,7 +312,7 @@ function render() {
   const forms = [...document.querySelectorAll('[data-form=newtask]')].map((f) => [f.dataset.where, f.elements.title.value, f.elements.text.value, f.elements.runtime.value]);
   const foc = document.activeElement; const focSel = foc?.dataset?.dirq ? `[data-dirq="${foc.dataset.dirq}"]` : foc?.form?.dataset?.form === 'newtask' ? `[data-form=newtask][data-where="${foc.form.dataset.where}"] [name="${foc.name}"]` : null;
   const body = S.view === 'today' ? `<div class="body">${todayView()}</div>` : S.view === 'work' ? workView() : S.view === 'staff' ? `<div class="body">${staffView()}</div>` : settingsView();
-  $('#root').innerHTML = topbar() + body + `<div class="sb" id="sb">${sbHtml()}</div>` + mtab() + (!S.st.me ? meModal() : '');
+  $('#root').innerHTML = topbar() + updBar() + body + `<div class="sb" id="sb">${sbHtml()}</div>` + mtab() + (!S.st.me ? meModal() : '');
   if (!S.prefill) for (const [w, ti, tx, rt] of forms) { const f = $(`[data-form=newtask][data-where="${w}"]`); if (f) { const E = f.elements; E.title.value = ti; E.text.value = tx; if (!E.runtime.querySelector(`option[value="${rt}"]`)?.disabled) E.runtime.value = rt; } }
   S.prefill = null;
   if (focSel) { const el = $(focSel); if (el) { el.focus(); try { const n = el.value.length; el.setSelectionRange(n, n); } catch {} } }
@@ -320,6 +329,8 @@ document.addEventListener('click', async (e) => {
   const a = b.dataset.act;
   try {
     if (a === 'go') { S.view = b.dataset.v; if (S.view === 'work') S.pane = S.task ? S.pane : 'list'; if (S.view === 'settings') { S.pane = 'nav'; loadSetTab(); } if (S.view === 'staff' && !S.staff) { S.staff = await api('/api/staff'); S.oss = await api('/api/open-source').catch(() => []); } if (S.view === 'today') S.my = await api('/api/my').catch(() => S.my); render(); }
+    else if (a === 'update') { await api('/api/update', { method: 'POST' }); S.upd.updating = '시작'; render(); }
+    else if (a === 'updlater') { S.updHide = S.upd?.latest; render(); }
     else if (a === 'settings') { S.view = 'settings'; if (b.dataset.tab) { S.setTab = b.dataset.tab; S.pane = 'page'; } else S.pane = 'nav'; render(); loadSetTab(); }
     else if (a === 'settab') { S.setTab = b.dataset.tab; S.pane = 'page'; render(); loadSetTab(); }
     else if (a === 'open') { if (b.dataset.id) await openTask(b.dataset.id); }
@@ -393,6 +404,11 @@ es.onmessage = async (m) => {
   const ev = JSON.parse(m.data);
   if (ev.type === 'msg' && ev.task === S.taskId && S.task) { S.task.messages.push(ev.msg); if (ev.msg.kind === 'file' || ev.msg.text?.startsWith('파일')) S.files = await api(`/api/tasks/${S.taskId}/files`); render(); }
   if (ev.type === 'status') { await load(); if (ev.task === S.taskId && ev.status !== 'working') { S.files = await api(`/api/tasks/${S.taskId}/files`); const h = S.files.find((f) => /\.html?$/i.test(f.name)); if (h && !S.previewSrc) await setPreview(fileUrl(h.name)); render(); loadUsage(); } }
+  if (ev.type === 'update') {
+    if (ev.step === 'fail') { if (S.upd) S.upd.updating = null; render(); toast(`업데이트하지 못했어요. ${ev.msg || ''}`); }
+    else if (ev.step === 'restart') { if (S.upd) S.upd.updating = '다시 켜는 중'; render(); waitRestart(ev.version); }
+    else { if (S.upd) S.upd.updating = ev.step; render(); }
+  }
   if (ev.type === 'auth') { if (S.st) { S.st.auth = { codex: ev.codex, claude: ev.claude }; S.auth = null; if (S.view === 'settings' && S.setTab === 'ai') loadSetTab(); else render(); } }
   if (ev.type === 'learn') { S.learnBusy = false; S.pending = await api('/api/learn/pending'); await load(); toast(ev.ok ? `점검 끝 · 대화 ${ev.files}개에서 후보 ${ev.candidates}개` : '점검하지 못했어요. 잠시 뒤 다시 눌러 주세요'); }
   if (ev.type === 'continued') { await load(); if (ev.ok && ev.task === S.taskId) { await openTask(ev.to); toast('새 대화로 이어갔어요'); } else if (!ev.ok) toast('정리 카드를 못 받았어요. 다시 눌러 주세요'); }
@@ -404,4 +420,14 @@ async function route() {
   else if (h.get('settings')) { S.view = 'settings'; S.setTab = h.get('settings'); S.pane = 'page'; render(); await loadSetTab(); }
   else if (h.has('staff')) { S.view = 'staff'; S.staff = await api('/api/staff'); S.oss = await api('/api/open-source').catch(() => []); render(); }
 }
-load().then(route).then(loadUsage); setInterval(loadUsage, 120000);
+// 업데이트 확인: 앱을 열 때, 그리고 켜 둔 동안 6시간마다
+async function checkUpdate() { try { S.upd = await api('/api/update'); render(); } catch {} }
+// 새 코드로 서버가 다시 켜질 때까지 기다렸다가 화면을 새로 연다
+async function waitRestart(v) {
+  for (let i = 0; i < 80; i++) {
+    await new Promise((r) => setTimeout(r, 1500));
+    try { const u = await (await fetch('/api/update')).json(); if (u.current === v) { location.reload(); return; } } catch {}
+  }
+  toast('다시 켜지지 않았어요. 앱을 껐다 켜 주세요');
+}
+load().then(route).then(loadUsage).then(checkUpdate); setInterval(loadUsage, 120000); setInterval(checkUpdate, 6 * 3600e3);
