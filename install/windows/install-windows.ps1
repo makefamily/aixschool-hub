@@ -11,6 +11,20 @@ function Say($m) { Write-Output "[AI 학교 허브] $m" }
 function Need($c) { [bool](Get-Command $c -ErrorAction SilentlyContinue) }
 
 Say "윈도우 설치 시작 · 허브 폴더 $HubHome"
+
+# AI 보호 구역(샌드박스) 안에서는 설치가 안 된다: 허브 폴더와 앱 설치 위치에 못 쓰고, 인터넷이 막히고,
+# 앱 설치 파일은 성공했다고 끝나는데 아무것도 안 깔린다. 조용히 넘어가지 않게 먼저 확인하고 멈춘다.
+$sandboxed = ("$env:USERNAME" -like 'CodexSandbox*') -or ((whoami) -like '*\codexsandbox*')
+if (-not $sandboxed) {
+  try { $t = Join-Path $env:LOCALAPPDATA "aihub-check-$PID.tmp"; Set-Content $t 'x' -ErrorAction Stop; Remove-Item $t -Force }
+  catch { $sandboxed = $true }
+}
+if ($sandboxed) {
+  Say 'AI 보호 구역(샌드박스) 안에서 실행됐어요. 이 안에서는 앱이 설치되지 않아 여기서 멈춥니다.'
+  Say 'AI에게: 방금 명령을 그대로, 보호 구역 밖에서 실행하겠다고 사용자 승인을 요청해 다시 실행하세요(Codex는 sandbox_permissions 를 require_escalated 로).'
+  Say '승인을 요청할 수 없으면 사용자에게 이 폴더의 install-windows.cmd 를 두 번 누르게 하세요.'
+  exit 3
+}
 if (-not (Need node)) {
   Say 'Node가 없어요. nodejs.org 에서 LTS 설치 파일을 받아 설치한 뒤 다시 실행하세요.'
   Start-Process 'https://nodejs.org/ko/download'
@@ -52,7 +66,10 @@ $setup = Get-ChildItem $Here -Filter '*setup*.exe' | Select-Object -First 1
 if ($setup) {
   Start-Process $setup.FullName -ArgumentList '/S' -Wait
   $app = Get-ChildItem "$env:LOCALAPPDATA" -Recurse -Filter 'aixschool-hub.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
-  if ($app) { Start-Process $app.FullName } else { Say '앱 위치를 못 찾았어요. 시작 메뉴에서 AI 학교 허브를 여세요.' }
+  if ($app) { Start-Process $app.FullName } else {
+    Say '앱이 설치되지 않았어요. 묶음 폴더의 ...setup.exe 를 두 번 눌러 설치한 뒤 시작 메뉴에서 AI 학교 허브를 여세요.'
+    exit 4
+  }
 } else { Say '앱 설치 파일이 묶음에 없어요.' }
 Say "끝. 허브 폴더: $HubHome"
 Say '앱에서 설정 > AI 로그인으로 Claude 로그인 상태를 확인하세요.'

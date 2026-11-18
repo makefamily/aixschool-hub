@@ -418,6 +418,28 @@ function findBrowser() {
   return c.find((f) => f && fs.existsSync(f)) || null;
 }
 // 멈추기: 윈도우는 프로그램이 띄운 하위 프로그램까지 같이 끈다
+// 주소를 이 PC 기본 브라우저로 연다(윈도우는 셸을 거치지 않아 & 가 든 주소도 안전)
+// 윈도우: 연결 프로그램 확인 단계에서 '앱 선택' 창만 뜨고 끝나는 PC가 있다(likim 실측).
+// 그래서 기본 브라우저의 실행 파일을 직접 찾아 주소를 넘긴다. 못 찾으면 엣지(윈도우 기본 포함).
+function winBrowser() {
+  const q = (k, v) => spawnSync('reg', ['query', k, ...(v ? ['/v', v] : ['/ve'])], { encoding: 'utf8', windowsHide: true }).stdout || '';
+  const prog = (q('HKCU\\Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\https\\UserChoice', 'ProgId').match(/ProgId\s+REG_SZ\s+(\S+)/) || [])[1];
+  if (prog) {
+    const cmd = (q(`HKCR\\${prog}\\shell\\open\\command`).match(/REG_(?:EXPAND_)?SZ\s+(.+)/) || [])[1] || '';
+    const exe = (cmd.match(/^"([^"]+\.exe)"/i) || cmd.match(/^(\S+\.exe)/i) || [])[1];
+    if (exe && fs.existsSync(exe)) return exe;
+  }
+  return [process.env['ProgramFiles(x86)'], process.env.ProgramFiles, process.env.LOCALAPPDATA].filter(Boolean).map((d) => path.join(d, 'Microsoft', 'Edge', 'Application', 'msedge.exe')).find((f) => fs.existsSync(f)) || null;
+}
+function openUrl(u) {
+  try {
+    const edge = PLATFORM === 'windows' ? winBrowser() : null;
+    const c = edge ? spawn(edge, [u], { detached: true, stdio: 'ignore' })
+      : PLATFORM === 'windows' ? spawn('rundll32.exe', ['url.dll,FileProtocolHandler', u], { detached: true, stdio: 'ignore', windowsHide: true })
+      : spawn(PLATFORM === 'mac' ? 'open' : 'xdg-open', [u], { detached: true, stdio: 'ignore' });
+    c.on('error', () => {}); c.unref();
+  } catch {}
+}
 function killTree(p) {
   try { if (PLATFORM === 'windows' && p.pid) spawn('taskkill', ['/PID', String(p.pid), '/T', '/F'], { windowsHide: true }).on('error', () => {}); else p.kill(); } catch {}
 }
@@ -594,9 +616,19 @@ const server = http.createServer(async (req, res) => {
       const [bin, pre] = who === 'codex' ? codexCommand() : [claudeCommand(), []];
       const args = who === 'codex' ? (act === 'login' ? ['login'] : ['logout']) : ['auth', act];
       const cs = cliSpawnArgs(bin, [...pre, ...args]);
-      const child = spawn(cs.cmd, cs.args, { env: who === 'codex' ? codexEnv() : process.env, detached: true, stdio: 'ignore', shell: cs.shell });
-      child.unref(); child.on('close', () => refreshAuth()); child.on('error', () => {});
-      return json(res, 200, { ok: true, msg: act === 'login' ? '이 PC에 로그인 창(브라우저)이 열려요. 로그인한 뒤 새로고침을 누르세요.' : '로그아웃했어요' });
+      // 로그인: 프로그램이 찍는 로그인 주소를 받아 허브가 직접 브라우저로 연다.
+      // (앱에서 켠 서버는 창 없는 프로세스라, 윈도우에서 프로그램이 스스로 브라우저를 못 여는 경우가 있다)
+      const child = spawn(cs.cmd, cs.args, { env: who === 'codex' ? codexEnv() : process.env, stdio: ['ignore', 'pipe', 'pipe'], shell: cs.shell, windowsHide: true });
+      child.on('close', () => refreshAuth()); child.on('error', () => {});
+      if (act !== 'login') return json(res, 200, { ok: true, msg: '로그아웃했어요' });
+      const loginUrl = await new Promise((resolve) => {
+        let buf = ''; const done = (u) => { clearTimeout(t); resolve(u); };
+        const t = setTimeout(() => done(''), 12000);
+        const on = (d) => { buf += d; const mm = buf.match(/https:\/\/[^\s"']*(?:oauth|authorize|login)[^\s"']*/i); if (mm) done(mm[0]); };
+        child.stdout.on('data', on); child.stderr.on('data', on); child.on('close', () => done(''));
+      });
+      if (loginUrl) openUrl(loginUrl);
+      return json(res, 200, { ok: true, url: loginUrl, msg: loginUrl ? '브라우저에 로그인 창을 열었어요. 로그인한 뒤 새로고침을 누르세요.' : '이 PC에 로그인 창(브라우저)이 열려요. 로그인한 뒤 새로고침을 누르세요.' });
     }
     // 화면
     if (p === '/' || p === '/index.html') return serveFile(res, path.join(PUB, 'index.html'));
