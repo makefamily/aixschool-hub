@@ -8,7 +8,8 @@ AI 직원 24명(블로그·스레드·카드뉴스·영상·상세페이지·주
 
 사용자가 이 링크를 주고 "설치해 줘"라고 했다면, 아래 순서대로 직접 실행하세요. 사용자에게 명령어를 보여 주거나 붙여 넣게 하지 말고, 무엇을 누르면 되는지만 말로 안내합니다.
 
-1. 운영체제를 확인합니다(맥 / 윈도우).
+1. 운영체제를 확인합니다(맥 / 윈도우). 그리고 명령이 실행되는지 아주 간단한 명령 하나로 먼저 확인합니다(맥 `pwd`, 윈도우 `Get-Location`).
+   - 이 단계에서 실패하면(윈도우에서 `setup refresh had errors`, `Failed to create ... process` 같은 메시지) 고치려고 하지 말고 바로 멈춥니다. 사용자에게 아래 '사람이 직접 설치하기' 순서를 그대로 안내합니다: Releases에서 `AISchoolHub-windows.zip`(맥은 `AISchoolHub-mac.zip`)을 받아 압축을 풀고, 설치 파일을 두 번 누르게 합니다. "환경이 복구되면 다시 요청해 달라"고 끝내지 않습니다.
 2. Node.js 20 이상이 있는지 확인합니다. 없으면 사용자에게 nodejs.org에서 LTS를 설치해 달라고 안내하고 멈춥니다(관리자 권한이 필요해서 사용자가 직접 설치합니다).
 3. 설치 스크립트를 실행합니다.
    - 맥: `curl -fsSL https://raw.githubusercontent.com/makefamily/aixschool-hub/main/get-mac.sh | bash`
