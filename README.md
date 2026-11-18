@@ -12,7 +12,7 @@ AI 직원 24명(블로그·스레드·카드뉴스·영상·상세페이지·주
    - 이 단계에서 실패하면(윈도우에서 `setup refresh had errors`, `Failed to create ... process` 같은 메시지) 고치려고 하지 말고 바로 멈춥니다. 사용자에게 아래 '사람이 직접 설치하기' 순서를 그대로 안내합니다: Releases에서 `AISchoolHub-windows.zip`(맥은 `AISchoolHub-mac.zip`)을 받아 압축을 풀고, 설치 파일을 두 번 누르게 합니다. "환경이 복구되면 다시 요청해 달라"고 끝내지 않습니다.
 2. Node.js 20 이상이 있는지 확인합니다. 없으면 사용자에게 nodejs.org에서 LTS를 설치해 달라고 안내하고 멈춥니다(관리자 권한이 필요해서 사용자가 직접 설치합니다).
 3. 설치 스크립트를 실행합니다.
-   - 맥: `curl -fsSL https://raw.githubusercontent.com/makefamily/aixschool-hub/main/get-mac.sh | bash`
+   - 맥: `curl -fsSL https://raw.githubusercontent.com/makefamily/aixschool-hub/main/get-mac.sh | bash` 를 실행합니다. AI의 보호 구역 안에서는 인터넷 받기와 허브 폴더(`~/AISchoolHub`)·앱 폴더(`~/Applications`) 쓰기가 막히므로, 이 명령도 처음부터 보호 구역 밖 실행으로 요청해 사용자 승인을 한 번 받습니다(Codex는 `sandbox_permissions`를 `require_escalated`로). 승인 창이 뜨면 사용자에게 "설치를 위해 한 번 허용을 눌러 주세요"라고 말합니다.
    - 윈도우: 아래 세 줄을 한 번의 명령으로 묶어 실행합니다. AI의 보호 구역(샌드박스) 안에서는 인터넷 받기도, 앱 설치도 되지 않고 앱 창도 사용자 화면에 뜨지 않습니다. 그래서 이 명령은 처음부터 보호 구역 밖 실행으로 요청해 사용자 승인을 한 번 받습니다(Codex는 명령을 낼 때 `sandbox_permissions`를 `require_escalated`로). 승인 창이 뜨면 사용자에게 "설치를 위해 한 번 허용을 눌러 주세요"라고 말합니다.
      ```
      Invoke-WebRequest https://github.com/makefamily/aixschool-hub/releases/latest/download/AISchoolHub-windows.zip -OutFile .\AISchoolHub-windows.zip -UseBasicParsing
