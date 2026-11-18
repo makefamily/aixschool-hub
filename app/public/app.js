@@ -77,13 +77,24 @@ function topbar() {
   <button class="me" data-act="settings" data-tab="me">${esc(S.st.me || '이름')}</button></div></div>`;
 }
 
-// ── 업데이트 띠: 새 버전이 있을 때만 위 줄 아래에 뜬다 ──
-function updBar() {
+// ── 업데이트 알림: 새 버전이 있을 때만 오른쪽 아래에 카드로 뜬다(아래 상태 줄 바로 위) ──
+// 화면을 다시 그릴 때마다 카드가 새로 날아들지 않게 #root 밖에 따로 두고, 내용이 바뀔 때만 바꾼다.
+const X_SVG = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>';
+function updCardHtml() {
   const u = S.upd; if (!u) return '';
-  if (u.updating) return `<div class="updbar"><span class="dot work"></span><span>업데이트 중 · ${esc(u.updating)}</span><span class="sp"></span><span class="ink3">끝나면 화면이 저절로 새로 열려요</span></div>`;
+  if (u.updating) return `<div class="updcard" role="status" aria-live="polite" aria-label="업데이트하는 중"><div class="uc-head"><h3>업데이트하는 중</h3></div><p>${esc(u.updating)}</p><div class="uc-bar"><i></i></div><p class="uc-sub">끝나면 화면이 저절로 새로 열려요.</p></div>`;
   if (!u.available || S.updHide === u.latest) return '';
-  const first = (u.notes || '').split('\n').map((l) => l.replace(/^[-*\s]+/, '').trim()).find(Boolean) || '';
-  return `<div class="updbar"><span>새 버전 <b class="num">v${esc(u.latest)}</b>이 나왔어요</span>${first ? `<span class="ink3 updnote" title="${esc(u.notes)}">${esc(first)}</span>` : ''}<span class="sp"></span><button class="btn" data-act="updlater">나중에</button><button class="btn pri" data-act="update">업데이트</button></div>`;
+  const notes = (u.notes || '').trim();
+  return `<div class="updcard" role="complementary" aria-live="polite" aria-label="새 버전 알림"><div class="uc-head"><h3>새 버전이 나왔어요</h3><button class="uc-x" data-act="updlater" aria-label="나중에 하기" title="나중에">${X_SVG}</button></div><p>AI 학교 허브 <span class="num">v${esc(u.latest)}</span>을 받을 수 있어요.</p><p class="uc-sub">누르면 새 버전으로 바꾸고 저절로 다시 켜져요. 맡긴 일과 대화는 그대로 남아요.</p>${notes && S.updNotes ? `<div class="uc-notes">${esc(notes)}</div>` : ''}${notes ? `<button class="uc-link" data-act="updnotes">${S.updNotes ? '바뀐 내용 접기' : '바뀐 내용 보기'}</button>` : ''}<button class="btn pri uc-go" data-act="update">업데이트</button></div>`;
+}
+let updShown = '';
+function renderUpd() {
+  let box = $('#updpop'); if (!box) { box = document.createElement('div'); box.id = 'updpop'; document.body.appendChild(box); }
+  // 오른쪽에 내장 브라우저(별도 화면)가 떠 있으면 그 밑에 가려지므로 왼쪽 아래로 옮긴다
+  box.classList.toggle('left', S.view === 'work' && S.sideTab === 'preview' && nativeOk());
+  const h = updCardHtml(); if (h === updShown) return;
+  const was = !!updShown; updShown = h; box.innerHTML = h;
+  if (h && !was) box.firstElementChild.classList.add('in');
 }
 
 // ── 오늘 ──
@@ -225,7 +236,7 @@ function settingsView() {
   let page = '';
   const back = `<button class="btn mob-only" data-act="pane" data-p="nav" style="margin-bottom:12px">${ic('back', 's')}설정</button>`;
   if (S.setTab === 'me') page = `<h2>내 정보</h2><p class="lead">허브 화면에 보이는 이름이에요. 이 PC 밖으로 나가지 않아요.</p><form data-form="me" class="card" style="max-width:480px;display:flex;flex-direction:column;gap:10px"><div class="field"><input name="me" value="${esc(S.st.me)}" placeholder="이름" aria-label="이름"></div><button class="btn dark" style="align-self:flex-start">저장</button></form>`;
-  if (S.setTab === 'ai') page = `<h2>AI 로그인</h2><p class="lead">허브는 내 구독으로 일해요. 둘 중 하나만 로그인돼 있어도 돼요. 로그인을 누르면 이 PC에 브라우저 로그인 창이 열려요.</p>${S.auth ? [['codex', 'Codex (ChatGPT 구독)'], ['claude', 'Claude (Claude 구독)']].map(([w, n]) => { const a = S.auth[w] || {}; return `<div class="card" style="max-width:640px;margin-bottom:12px"><h4>${n}<span class="r"><span class="st ${a.ok ? 'work' : 'wait'}">${a.ok ? '로그인됨' : a.installed ? '로그인 필요' : '프로그램 없음'}</span></span></h4><p class="md">${esc(a.text || '')}</p><div class="acts">${a.installed ? `<button class="btn ${a.ok ? '' : 'pri'}" data-act="authlogin" data-who="${w}">${a.ok ? '다시 로그인' : '로그인'}</button>${a.ok ? `<button class="btn" data-act="authlogout" data-who="${w}">로그아웃</button>` : ''}` : '<span class="crumb">강사에게 설치를 부탁하세요.</span>'}</div></div>`; }).join('') + (S.loginUrl ? `<div class="card" style="max-width:640px;margin-bottom:12px"><h4>브라우저가 안 열리면</h4><p class="md">아래 버튼으로 로그인 주소를 복사해 브라우저 주소창에 붙여 넣으세요. 로그인을 마치면 다시 확인을 누르세요.</p><div class="acts"><button class="btn pri" data-act="copyurl">로그인 주소 복사</button></div></div>` : '') + `<button class="btn" data-act="authrefresh">${ic('refresh', 's')}다시 확인</button>` + pcCard(S.auth.pc) : '<p class="empty">확인하는 중…</p>'}`;
+  if (S.setTab === 'ai') page = `<h2>AI 로그인</h2><p class="lead">허브는 내 구독으로 일해요. 둘 중 하나만 로그인돼 있어도 돼요. 로그인을 누르면 브라우저에 로그인 창이 열려요. 로그인을 마치면 이 화면이 저절로 바뀌어요.</p>${S.auth ? [['codex', 'Codex (ChatGPT 구독)'], ['claude', 'Claude (Claude 구독)']].map(([w, n]) => { const a = S.auth[w] || {}; return `<div class="card" style="max-width:640px;margin-bottom:12px"><h4>${n}<span class="r"><span class="st ${a.ok ? 'work' : 'wait'}">${a.ok ? '로그인됨' : a.installed ? '로그인 필요' : '프로그램 없음'}</span></span></h4><p class="md">${esc(a.text || '')}</p><div class="acts">${a.installed ? `<button class="btn ${a.ok ? '' : 'pri'}" data-act="authlogin" data-who="${w}">${a.ok ? '다시 로그인' : '로그인'}</button>${a.ok ? `<button class="btn" data-act="authlogout" data-who="${w}">로그아웃</button>` : ''}` : '<span class="crumb">강사에게 설치를 부탁하세요.</span>'}</div></div>`; }).join('') + (S.loginUrl ? (S.loginWho === 'claude' ? `<form class="card" data-form="claudecode" style="max-width:640px;margin-bottom:12px"><h4>브라우저에 코드가 보이면</h4><p class="md">로그인을 마친 브라우저 화면에 긴 코드가 보일 때만, 그 코드를 복사해 아래 칸에 붙여 넣으세요. 코드 없이 로그인이 끝났다면 그냥 두면 돼요.</p><div class="field" style="margin:10px 0"><input name="code" placeholder="코드 붙여 넣기" aria-label="로그인 코드" autocomplete="off" spellcheck="false"></div><div class="acts"><button class="btn pri">코드 넣기</button></div></form>` : '') + `<div class="card" style="max-width:640px;margin-bottom:12px"><h4>브라우저가 안 열리면</h4><p class="md">아래 버튼으로 로그인 주소를 복사해 브라우저 주소창에 붙여 넣으세요.${S.loginWho === 'claude' ? ' 로그인하면 코드가 보여요. 그 코드를 위 칸에 넣으면 끝나요.' : ' 로그인을 마치면 다시 확인을 누르세요.'}</p><div class="acts"><button class="btn pri" data-act="copyurl">로그인 주소 복사</button></div></div>` : '') + `<button class="btn" data-act="authrefresh">${ic('refresh', 's')}다시 확인</button>` + pcCard(S.auth.pc) : '<p class="empty">확인하는 중…</p>'}`;
   if (S.setTab === 'conn') page = connPage();
   if (S.setTab === 'skills') page = skillsPage();
   if (S.setTab === 'rules') page = rulesPage();
@@ -312,7 +323,8 @@ function render() {
   const forms = [...document.querySelectorAll('[data-form=newtask]')].map((f) => [f.dataset.where, f.elements.title.value, f.elements.text.value, f.elements.runtime.value]);
   const foc = document.activeElement; const focSel = foc?.dataset?.dirq ? `[data-dirq="${foc.dataset.dirq}"]` : foc?.form?.dataset?.form === 'newtask' ? `[data-form=newtask][data-where="${foc.form.dataset.where}"] [name="${foc.name}"]` : null;
   const body = S.view === 'today' ? `<div class="body">${todayView()}</div>` : S.view === 'work' ? workView() : S.view === 'staff' ? `<div class="body">${staffView()}</div>` : settingsView();
-  $('#root').innerHTML = topbar() + updBar() + body + `<div class="sb" id="sb">${sbHtml()}</div>` + mtab() + (!S.st.me ? meModal() : '');
+  renderUpd();
+  $('#root').innerHTML = topbar() + body + `<div class="sb" id="sb">${sbHtml()}</div>` + mtab() + (!S.st.me ? meModal() : '');
   if (!S.prefill) for (const [w, ti, tx, rt] of forms) { const f = $(`[data-form=newtask][data-where="${w}"]`); if (f) { const E = f.elements; E.title.value = ti; E.text.value = tx; if (!E.runtime.querySelector(`option[value="${rt}"]`)?.disabled) E.runtime.value = rt; } }
   S.prefill = null;
   if (focSel) { const el = $(focSel); if (el) { el.focus(); try { const n = el.value.length; el.setSelectionRange(n, n); } catch {} } }
@@ -330,7 +342,11 @@ document.addEventListener('click', async (e) => {
   try {
     if (a === 'go') { S.view = b.dataset.v; if (S.view === 'work') S.pane = S.task ? S.pane : 'list'; if (S.view === 'settings') { S.pane = 'nav'; loadSetTab(); } if (S.view === 'staff' && !S.staff) { S.staff = await api('/api/staff'); S.oss = await api('/api/open-source').catch(() => []); } if (S.view === 'today') S.my = await api('/api/my').catch(() => S.my); render(); }
     else if (a === 'update') { await api('/api/update', { method: 'POST' }); S.upd.updating = '시작'; render(); }
-    else if (a === 'updlater') { S.updHide = S.upd?.latest; render(); }
+    else if (a === 'updlater') { // 살짝 흐려진 뒤 사라진다
+      const c = $('#updpop .updcard'); const off = () => { S.updHide = S.upd?.latest; render(); };
+      if (c && !matchMedia('(prefers-reduced-motion: reduce)').matches) { c.classList.add('out'); setTimeout(off, 150); } else off();
+    }
+    else if (a === 'updnotes') { S.updNotes = !S.updNotes; render(); }
     else if (a === 'settings') { S.view = 'settings'; if (b.dataset.tab) { S.setTab = b.dataset.tab; S.pane = 'page'; } else S.pane = 'nav'; render(); loadSetTab(); }
     else if (a === 'settab') { S.setTab = b.dataset.tab; S.pane = 'page'; render(); loadSetTab(); }
     else if (a === 'open') { if (b.dataset.id) await openTask(b.dataset.id); }
@@ -355,7 +371,7 @@ document.addEventListener('click', async (e) => {
     else if (a === 'connhelp') { const r = await api('/api/connections/help', { method: 'POST', body: { id: b.dataset.id } }); await load(); await openTask(r.task); }
     else if (a === 'keydel') { if (!confirm('저장한 키를 지울까요?')) return; await api('/api/connections/key', { method: 'POST', body: { name: b.dataset.name, remove: true } }); S.conns = await api('/api/connections'); render(); toast('지웠어요'); }
     else if (a === 'osshire') { const o = (S.oss || []).find((x) => x.name === b.dataset.name); S.view = 'today'; S.prefill = { where: 'today', title: `${o.name} 써 보기`, text: o.say }; render(); }
-    else if (a === 'authlogin' || a === 'authlogout') { const r = await api(`/api/auth/${b.dataset.who}/${a === 'authlogin' ? 'login' : 'logout'}`, { method: 'POST' }); toast(r.msg); if (r.url) { S.loginUrl = r.url; render(); } }
+    else if (a === 'authlogin' || a === 'authlogout') { const r = await api(`/api/auth/${b.dataset.who}/${a === 'authlogin' ? 'login' : 'logout'}`, { method: 'POST' }); toast(r.msg); if (a === 'authlogin') { S.loginUrl = r.url || ''; S.loginWho = r.url ? b.dataset.who : null; render(); } }
     else if (a === 'copyurl') { try { await navigator.clipboard.writeText(S.loginUrl || ''); toast('주소를 복사했어요. 브라우저 주소창에 붙여 넣으세요'); } catch { toast('복사하지 못했어요. 주소를 길게 눌러 복사해 주세요'); } }
     else if (a === 'authrefresh') { S.auth = null; render(); S.auth = await api('/api/auth'); await load(); }
     else if (a === 'scan') { S.scanBusy = true; render(); S.scan = await api('/api/skills/scan', { method: 'POST' }); S.scanBusy = false; render(); }
@@ -385,6 +401,7 @@ document.addEventListener('submit', async (e) => {
     else if (k === 'send') { if (!d.text.trim()) return; f.querySelector('textarea').value = ''; await api(`/api/tasks/${S.taskId}/send`, { method: 'POST', body: { text: d.text } }); await openTask(S.taskId, true); render(); }
     else if (k === 'url') { let u = d.u.trim(); if (!u) return; if (!/^(https?:|\/)/.test(u)) u = /\.\w{1,5}$/.test(u) && !/^www\./.test(u) && S.files.some((x) => x.name === u) ? fileUrl(u) : 'https://' + u; await setPreview(u); render(); }
     else if (k === 'me') { await api('/api/me', { method: 'POST', body: d }); await load(); const a = S.st.auth; if (a && !a.codex && !a.claude) { S.view = 'settings'; S.setTab = 'ai'; S.pane = 'page'; render(); loadSetTab(); toast('먼저 AI 로그인을 해 주세요'); } else toast('오늘 탭의 새로 맡기기에서 첫 일을 맡겨 보세요'); }
+    else if (k === 'claudecode') { if (!d.code.trim()) return toast('코드를 붙여 넣어 주세요'); toast('확인하는 중…'); const r = await api('/api/auth/claude/code', { method: 'POST', body: { code: d.code.trim() } }); toast(r.msg); if (!r.ok) { S.loginUrl = ''; S.loginWho = null; } S.auth = await api('/api/auth'); render(); }
     else if (k === 'key') { if (!d.value.trim()) return toast('키를 붙여 넣어 주세요'); await api('/api/connections/key', { method: 'POST', body: { name: d.name, value: d.value } }); f.reset(); S.conns = await api('/api/connections'); render(); toast('이 PC 금고에 저장했어요'); }
     else if (k === 'register') { const names = [...f.querySelectorAll('input[name=n]:checked')].map((x) => x.value); if (!names.length) return toast('넣을 스킬을 골라 주세요'); toast('허브에 넣는 중…'); const r = await api('/api/skills/register', { method: 'POST', body: { names } }); toast(r.ok ? `${names.length}개를 허브에 넣었어요` : '넣지 못했어요'); S.scan = await api('/api/skills/scan', { method: 'POST' }); render(); }
   } catch (err) { toast(err.message); }
@@ -410,7 +427,7 @@ es.onmessage = async (m) => {
     else if (ev.step === 'restart') { if (S.upd) S.upd.updating = '다시 켜는 중'; render(); waitRestart(ev.version); }
     else { if (S.upd) S.upd.updating = ev.step; render(); }
   }
-  if (ev.type === 'auth') { if (S.st) { S.st.auth = { codex: ev.codex, claude: ev.claude }; S.auth = null; if (S.view === 'settings' && S.setTab === 'ai') loadSetTab(); else render(); } }
+  if (ev.type === 'auth') { if (S.st) { S.st.auth = { codex: ev.codex, claude: ev.claude }; S.auth = null; if (S.loginWho && ev[S.loginWho]) { S.loginUrl = ''; S.loginWho = null; toast('로그인됐어요'); } if (S.view === 'settings' && S.setTab === 'ai') loadSetTab(); else render(); } }
   if (ev.type === 'learn') { S.learnBusy = false; S.pending = await api('/api/learn/pending'); await load(); toast(ev.ok ? `점검 끝 · 대화 ${ev.files}개에서 후보 ${ev.candidates}개` : '점검하지 못했어요. 잠시 뒤 다시 눌러 주세요'); }
   if (ev.type === 'continued') { await load(); if (ev.ok && ev.task === S.taskId) { await openTask(ev.to); toast('새 대화로 이어갔어요'); } else if (!ev.ok) toast('정리 카드를 못 받았어요. 다시 눌러 주세요'); }
 };

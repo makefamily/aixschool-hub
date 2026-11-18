@@ -10,8 +10,9 @@ use std::time::{Duration, Instant};
 use tauri::{LogicalPosition, LogicalSize, Manager, WebviewBuilder, WebviewUrl, WebviewWindowBuilder};
 
 // MF 허브(7700)와 겹치지 않는 포트. 한 PC에서 둘 다 켤 수 있다.
-const PORT: u16 = 7710;
-const URL: &str = "http://127.0.0.1:7710/";
+// 점검용: AIHUB_PORT 로 다른 포트를 쓸 수 있다(서버도 같은 값을 읽는다).
+fn port() -> u16 { std::env::var("AIHUB_PORT").ok().and_then(|v| v.parse().ok()).unwrap_or(7710) }
+fn base_url() -> String { format!("http://127.0.0.1:{}/", port()) }
 
 struct Server(Mutex<Option<Child>>);
 
@@ -40,7 +41,7 @@ fn find_node() -> PathBuf {
     c.into_iter().find(|p| p.exists()).unwrap_or_else(|| PathBuf::from("node"))
 }
 
-fn up() -> bool { TcpStream::connect_timeout(&([127, 0, 0, 1], PORT).into(), Duration::from_millis(300)).is_ok() }
+fn up() -> bool { TcpStream::connect_timeout(&([127, 0, 0, 1], port()).into(), Duration::from_millis(300)).is_ok() }
 
 fn start_server() -> Option<Child> {
     if up() { return None; } // 이미 켜져 있으면 그대로 쓴다
@@ -115,7 +116,7 @@ fn main() {
             let child = start_server();
             app.manage(Server(Mutex::new(child)));
 
-            let start = format!("{}{}", URL, std::env::var("AIHUB_START_PATH").unwrap_or_default()); // 점검용: 특정 화면으로 바로 열기
+            let start = format!("{}{}", base_url(), std::env::var("AIHUB_START_PATH").unwrap_or_default()); // 점검용: 특정 화면으로 바로 열기
             WebviewWindowBuilder::new(app, "main", WebviewUrl::External(start.parse().unwrap()))
                 .title("AI 학교 허브")
                 .inner_size(1360.0, 860.0)

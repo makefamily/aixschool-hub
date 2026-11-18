@@ -402,7 +402,22 @@ async function authStatus() {
     claude: { ok: cl.status === 0 && /"loggedIn":\s*true|logged in/i.test(cltext), text: cl.error ? 'Claude 프로그램이 없어요' : clnice || cltext.split('\n').slice(0, 3).join(' ').slice(0, 160), installed: !cl.error },
   };
 }
-async function refreshAuth() { try { const a = await authStatus(); authCache = { at: Date.now(), codex: a.codex.ok, claude: a.claude.ok, full: a }; emit({ type: 'auth', codex: a.codex.ok, claude: a.claude.ok }); } catch (e) { console.error('[로그인 확인 오류]', e); } return authCache; }
+// 로그인 상태 확인. 화면 알림(auth)은 상태가 바뀌었을 때만 보낸다.
+// (화면이 알림을 받고 다시 확인을 부르면, 매번 알림을 보낼 경우 확인이 끝없이 되풀이된다 — v0.2.1 맥 멈춤 원인)
+// 확인이 도는 중에 또 부르면 같은 확인을 같이 기다린다(프로그램을 겹쳐 띄우지 않게).
+let authRun = null;
+function refreshAuth() {
+  if (authRun) return authRun;
+  authRun = (async () => {
+    try {
+      const a = await authStatus(); const prev = authCache;
+      authCache = { at: Date.now(), codex: a.codex.ok, claude: a.claude.ok, full: a };
+      if (!prev || prev.codex !== a.codex.ok || prev.claude !== a.claude.ok) emit({ type: 'auth', codex: a.codex.ok, claude: a.claude.ok });
+    } catch (e) { console.error('[로그인 확인 오류]', e); }
+    return authCache;
+  })().finally(() => { authRun = null; });
+  return authRun;
+}
 setTimeout(refreshAuth, 300); setInterval(refreshAuth, 10 * 60_000);
 function incomingList() { return []; }
 
@@ -431,6 +446,9 @@ function winBrowser() {
   }
   return [process.env['ProgramFiles(x86)'], process.env.ProgramFiles, process.env.LOCALAPPDATA].filter(Boolean).map((d) => path.join(d, 'Microsoft', 'Edge', 'Application', 'msedge.exe')).find((f) => fs.existsSync(f)) || null;
 }
+// 진행 중인 로그인 프로그램(AI별 하나)
+const logins = {};
+function stopLogin(who) { const L = logins[who]; if (!L) return; delete logins[who]; clearTimeout(L.timer); try { L.child.stdin?.end(); } catch {} try { L.child.kill(); } catch {} }
 function openUrl(u) {
   try {
     const edge = PLATFORM === 'windows' ? winBrowser() : null;
@@ -616,19 +634,44 @@ const server = http.createServer(async (req, res) => {
       const [bin, pre] = who === 'codex' ? codexCommand() : [claudeCommand(), []];
       const args = who === 'codex' ? (act === 'login' ? ['login'] : ['logout']) : ['auth', act];
       const cs = cliSpawnArgs(bin, [...pre, ...args]);
-      // 로그인: 프로그램이 찍는 로그인 주소를 받아 허브가 직접 브라우저로 연다.
-      // (앱에서 켠 서버는 창 없는 프로세스라, 윈도우에서 프로그램이 스스로 브라우저를 못 여는 경우가 있다)
-      const child = spawn(cs.cmd, cs.args, { env: who === 'codex' ? codexEnv() : process.env, stdio: ['ignore', 'pipe', 'pipe'], shell: cs.shell, windowsHide: true });
-      child.on('close', () => refreshAuth()); child.on('error', () => {});
-      if (act !== 'login') return json(res, 200, { ok: true, msg: '로그아웃했어요' });
+      // 같은 AI의 앞선 로그인 창구가 남아 있으면 끝낸다(여러 번 눌러도 하나만 남게)
+      stopLogin(who);
+      // 로그인: 프로그램이 찍는 로그인 주소를 받아 둔다.
+      // Claude는 로그인 뒤 보이는 코드를 받을 수 있게 입력 통로(stdin)를 열어 둔다.
+      const child = spawn(cs.cmd, cs.args, { env: who === 'codex' ? codexEnv() : process.env, stdio: [who === 'claude' && act === 'login' ? 'pipe' : 'ignore', 'pipe', 'pipe'], shell: cs.shell, windowsHide: true });
+      child.on('error', () => {}); child.stdin?.on('error', () => {});
+      if (act !== 'login') { child.on('close', () => refreshAuth()); return json(res, 200, { ok: true, msg: '로그아웃했어요' }); }
+      const L = { child, out: '', timer: setTimeout(() => stopLogin(who), 10 * 60_000) };
+      logins[who] = L;
+      child.on('close', () => { clearTimeout(L.timer); if (logins[who] === L) delete logins[who]; refreshAuth(); });
       const loginUrl = await new Promise((resolve) => {
-        let buf = ''; const done = (u) => { clearTimeout(t); resolve(u); };
+        const done = (u) => { clearTimeout(t); resolve(u); };
         const t = setTimeout(() => done(''), 12000);
-        const on = (d) => { buf += d; const mm = buf.match(/https:\/\/[^\s"']*(?:oauth|authorize|login)[^\s"']*/i); if (mm) done(mm[0]); };
+        // 주소 뒤에 화면 꾸밈 글자(ESC)가 붙어 오므로 거기서 끊는다
+        const on = (d) => { L.out += d; const mm = L.out.match(/https:\/\/[^\s"'\x1b\x07]*(?:oauth|authorize|login)[^\s"'\x1b\x07]*/i); if (mm) done(mm[0]); };
         child.stdout.on('data', on); child.stderr.on('data', on); child.on('close', () => done(''));
       });
-      if (loginUrl) openUrl(loginUrl);
-      return json(res, 200, { ok: true, url: loginUrl, msg: loginUrl ? '브라우저에 로그인 창을 열었어요. 로그인한 뒤 새로고침을 누르세요.' : '이 PC에 로그인 창(브라우저)이 열려요. 로그인한 뒤 새로고침을 누르세요.' });
+      // 맥의 Claude는 프로그램이 스스로 브라우저를 열고 로그인이 끝나면 저절로 이어진다.
+      // 그때 허브가 주소를 또 열면 코드만 보이는 창이 하나 더 떠서 헷갈린다 → 맥 Claude는 열지 않는다.
+      // 윈도우는 창 없는 프로세스라 프로그램이 브라우저를 못 여는 PC가 있어 허브가 직접 연다(코드는 허브 칸에 붙여 넣는다).
+      const selfOpens = who === 'claude' && PLATFORM !== 'windows';
+      if (loginUrl && !selfOpens) openUrl(loginUrl);
+      return json(res, 200, { ok: true, url: loginUrl, who, code: who === 'claude', msg: '브라우저에 로그인 창을 열었어요. 로그인을 마치면 이 화면이 저절로 바뀌어요.' });
+    }
+    // Claude 로그인 코드: 브라우저에 코드가 보이면 허브 칸에 붙여 넣어 로그인 프로그램에 넘긴다
+    if (p === '/api/auth/claude/code' && req.method === 'POST') {
+      const b = await body(req); const code = String(b.code || '').trim();
+      const L = logins.claude;
+      if (!code) return json(res, 400, { ok: false, msg: '코드를 붙여 넣어 주세요' });
+      if (!L || L.child.exitCode !== null || !L.child.stdin?.writable) return json(res, 200, { ok: false, msg: '로그인 창구가 닫혔어요. 로그인 버튼을 다시 눌러 새 코드를 받아 주세요.' });
+      // 로그인 프로그램이 0으로 끝나야 성공이다(상태 확인만 보면 다른 방법으로 로그인된 PC에서 틀린 코드도 성공으로 보인다)
+      const closed = new Promise((resolve) => { L.child.on('close', (c) => resolve(c)); setTimeout(() => resolve('timeout'), 30000); });
+      L.child.stdin.write(code + '\n');
+      const exit = await closed;
+      if (exit === 'timeout') stopLogin('claude');
+      await refreshAuth();
+      if (exit === 0) return json(res, 200, { ok: true, msg: 'Claude 로그인이 끝났어요' });
+      return json(res, 200, { ok: false, msg: '코드가 맞지 않아요. 로그인 버튼을 다시 눌러 새 코드를 받아 주세요.' });
     }
     // 화면
     if (p === '/' || p === '/index.html') return serveFile(res, path.join(PUB, 'index.html'));
@@ -650,6 +693,8 @@ if (process.env.AIHUB_IDLE_EXIT) {
   let idle = 0;
   setInterval(() => { idle = clients.size || running.size || updating ? 0 : idle + 15; if (idle >= 60) { console.log('[AI 학교 허브] 화면이 닫혀 서버를 끝냄'); process.exit(0); } }, 15000).unref();
 }
+// 서버가 끝날 때 로그인 프로그램도 같이 끝낸다
+process.on('exit', () => { for (const w of Object.keys(logins)) stopLogin(w); });
 let listenTries = 0;
 server.on('error', (e) => { if (e.code === 'EADDRINUSE' && listenTries++ < 40) return setTimeout(() => server.listen(PORT, '127.0.0.1'), 500); console.error('[AI 학교 허브] 서버를 열지 못함', e); process.exit(1); });
 server.listen(PORT, '127.0.0.1', () => {
