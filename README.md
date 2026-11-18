@@ -13,12 +13,12 @@ AI 직원 24명(블로그·스레드·카드뉴스·영상·상세페이지·주
 2. Node.js 20 이상이 있는지 확인합니다. 없으면 사용자에게 nodejs.org에서 LTS를 설치해 달라고 안내하고 멈춥니다(관리자 권한이 필요해서 사용자가 직접 설치합니다).
 3. 설치 스크립트를 실행합니다.
    - 맥: `curl -fsSL https://raw.githubusercontent.com/makefamily/aixschool-hub/main/get-mac.sh | bash`
-   - 윈도우(PowerShell): 아래 세 줄을 차례로 실행합니다. 받은 스크립트를 바로 실행하는 방식(`irm ... | iex`)은 Windows 보안이 악성으로 막으니 쓰지 않습니다.
+   - 윈도우: AI의 보호 구역 안에서는 앱 설치가 제대로 되지 않습니다(설치는 끝났다고 나오는데 시작 메뉴에 앱이 없음). 그래서 AI는 묶음을 받아 풀기까지만 하고, 마지막 설치는 사용자가 두 번 눌러서 합니다.
      ```
-     Invoke-WebRequest https://github.com/makefamily/aixschool-hub/releases/latest/download/AISchoolHub-windows.zip -OutFile "$env:TEMP\aischoolhub.zip" -UseBasicParsing
-     Expand-Archive "$env:TEMP\aischoolhub.zip" "$env:TEMP\aischoolhub" -Force
-     powershell -NoProfile -ExecutionPolicy Bypass -File "$env:TEMP\aischoolhub\AISchoolHub-install\install-windows.ps1"
+     Invoke-WebRequest https://github.com/makefamily/aixschool-hub/releases/latest/download/AISchoolHub-windows.zip -OutFile .\AISchoolHub-windows.zip -UseBasicParsing
+     Expand-Archive .\AISchoolHub-windows.zip . -Force
      ```
+     받기가 끝나면 그 폴더를 탐색기로 열어 주고(`explorer .\AISchoolHub-install`), 사용자에게 "`install-windows.cmd`를 두 번 눌러 주세요. 파란 창이 뜨면 추가 정보 › 실행을 누르세요"라고 안내합니다. 받은 스크립트를 바로 실행하는 방식(`irm ... | iex`)은 Windows 보안이 악성으로 막으니 쓰지 않습니다.
 4. 중간에 ChatGPT(Codex) 로그인 브라우저가 뜨면 사용자 본인 계정으로 로그인하도록 안내합니다. Codex 구독이 없으면 창을 닫아도 됩니다.
 5. 끝나면 'AI 학교 허브' 앱(별도 창)이 열립니다. 확인한다고 브라우저로 허브 주소(127.0.0.1:7710)를 열지 마세요. 허브는 앱 창에서 쓰는 것입니다. 앱 창이 안 보이면 사용자에게 시작 메뉴(윈도우)나 응용 프로그램 폴더(맥)에서 'AI 학교 허브'를 열게 하고, 거기에도 없으면 묶음 폴더의 `...setup.exe`를 두 번 누르게 합니다. 사용자에게 이름을 넣고 설정 › AI 로그인에서 Claude 또는 Codex가 "로그인됨"인지 확인하게 합니다.
 6. 마지막 줄에 "끝. 허브 폴더: ..."가 나오면 설치 완료입니다. 실패하면 마지막 20줄을 읽고 원인을 한 줄로 알려 주세요.
