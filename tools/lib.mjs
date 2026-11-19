@@ -60,6 +60,7 @@ export function myStatus() {
 export function codexEnv(home = codexHome()) {
   const shim = path.join(hubHome(), 'home-shim');
   fs.mkdirSync(shim, { recursive: true });
+  try { fs.mkdirSync(home, { recursive: true }); } catch {} // Codex는 이 폴더가 없으면 오류를 낸다
   return { ...process.env, CODEX_HOME: home, HOME: shim, USERPROFILE: shim };
 }
 
@@ -122,34 +123,49 @@ export function args(argv = process.argv.slice(2)) {
 
 // 윈도우는 codex.cmd를 셸 없이 못 띄우므로 npm 전역의 codex.js를 node로 직접 실행한다.
 // 설치 스크립트가 허브 폴더 안(cli/)에 깐 Codex를 먼저 쓴다(관리자 권한·PATH 필요 없음).
+// 맥: 앱을 Finder로 열면 PATH가 짧고 순서도 달라서, 이름만 있고 실행은 안 되는 옛 설치본이 먼저 잡히기도 한다(실측).
+// 그래서 후보를 차례로 실제 실행해 보고(--version) 되는 것만 쓴다. 못 찾은 결과는 기억하지 않는다(나중에 설치하면 바로 잡히게).
 let codexCmd;
+const runs = (bin, pre = []) => { try { return spawnSync(bin, [...pre, '--version'], { stdio: 'ignore', timeout: 10000, windowsHide: true }).status === 0; } catch { return false; } };
+const pathHits = (name) => (spawnSync(PLATFORM === 'windows' ? 'where' : 'which', PLATFORM === 'windows' ? [name] : ['-a', name], { encoding: 'utf8', windowsHide: true }).stdout || '').split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+// nvm처럼 버전 폴더 아래에 깔린 프로그램(최신 버전 먼저)
+function nvmBins(home, name) {
+  try { const d = path.join(home, '.nvm', 'versions', 'node'); return fs.readdirSync(d).sort().reverse().map((v) => path.join(d, v, 'bin', name)); } catch { return []; }
+}
 export function codexCommand() {
   if (codexCmd) return codexCmd;
   const local = path.join(hubHome(), 'cli', 'node_modules', '@openai', 'codex', 'bin', 'codex.js');
+  if (PLATFORM !== 'windows') {
+    if (fs.existsSync(local) && runs(process.execPath, [local])) return (codexCmd = [process.execPath, [local]]);
+    const home = os.homedir();
+    const cands = [...pathHits('codex'), ...['/opt/homebrew/bin', '/usr/local/bin', path.join(home, '.local', 'bin'), path.join(home, '.npm-global', 'bin'), path.join(home, '.volta', 'bin'), path.join(home, '.bun', 'bin')].map((d) => path.join(d, 'codex')), ...nvmBins(home, 'codex'), '/Applications/Codex.app/Contents/Resources/codex', '/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex'];
+    for (const c of [...new Set(cands)]) if (fs.existsSync(c) && runs(c)) return (codexCmd = [c, []]);
+    return fs.existsSync(local) ? [process.execPath, [local]] : ['codex', []];
+  }
   if (fs.existsSync(local)) return (codexCmd = [process.execPath, [local]]);
-  if (PLATFORM !== 'windows') return (codexCmd = ['codex', []]);
-  const r = spawnSync('where', ['codex'], { encoding: 'utf8' });
-  for (const p of (r.stdout || '').split(/\r?\n/).filter(Boolean)) {
-    const js = path.join(path.dirname(p), 'node_modules', '@openai', 'codex', 'bin', 'codex.js');
+  const dirs = [...pathHits('codex').map((p) => path.dirname(p)), path.join(process.env.APPDATA || '', 'npm')];
+  for (const d of [...new Set(dirs)]) {
+    const js = path.join(d, 'node_modules', '@openai', 'codex', 'bin', 'codex.js');
     if (fs.existsSync(js)) return (codexCmd = [process.execPath, [js]]);
   }
   throw new Error('Codex 프로그램이 이 PC에 없어요. Claude만으로도 허브는 돌아가요.');
 }
 
-// Claude CLI 위치: PATH에 없어도 기본 설치 자리(~/.local/bin, ~/.claude/local)를 찾아본다.
+// Claude CLI 위치: PATH에 없어도 흔한 설치 자리를 찾아본다(공식 설치 파일·npm·brew·winget·volta·bun·nvm).
+// 못 찾은 결과는 기억하지 않는다 — 허브가 켜진 뒤에 설치해도 '다시 확인'으로 바로 잡힌다.
 let claudeCmd;
 export function claudeCommand() {
   if (claudeCmd) return claudeCmd;
   if (process.env.AIHUB_CLAUDE_BIN) return (claudeCmd = PLATFORM === 'windows' ? resolveWinCmd(process.env.AIHUB_CLAUDE_BIN) : process.env.AIHUB_CLAUDE_BIN);
-  const home = os.homedir();
+  const home = os.homedir(), E = process.env;
   const cands = PLATFORM === 'windows'
-    ? [path.join(home, '.local', 'bin', 'claude.exe'), path.join(process.env.APPDATA || '', 'npm', 'claude.cmd')]
-    : [path.join(home, '.local', 'bin', 'claude'), path.join(home, '.claude', 'local', 'claude'), '/opt/homebrew/bin/claude', '/usr/local/bin/claude'];
-  const r = spawnSync(PLATFORM === 'windows' ? 'where' : 'which', ['claude'], { encoding: 'utf8' });
+    ? [path.join(home, '.local', 'bin', 'claude.exe'), path.join(E.APPDATA || '', 'npm', 'claude.cmd'), path.join(E.LOCALAPPDATA || '', 'Microsoft', 'WinGet', 'Links', 'claude.exe'), path.join(home, '.claude', 'local', 'claude.exe'), path.join(home, '.claude', 'bin', 'claude.exe'), path.join(home, '.bun', 'bin', 'claude.exe'), path.join(E.LOCALAPPDATA || '', 'Volta', 'bin', 'claude.exe'), path.join(home, 'scoop', 'shims', 'claude.exe')]
+    : [path.join(home, '.local', 'bin', 'claude'), path.join(home, '.claude', 'local', 'claude'), path.join(home, '.claude', 'bin', 'claude'), '/opt/homebrew/bin/claude', '/usr/local/bin/claude', path.join(home, '.npm-global', 'bin', 'claude'), path.join(home, '.volta', 'bin', 'claude'), path.join(home, '.bun', 'bin', 'claude'), ...nvmBins(home, 'claude')];
   // 윈도우의 where는 확장자 없는 셸 스크립트(npm\claude)를 먼저 주는데 그건 실행이 안 된다 → .exe/.cmd만 쓴다
-  const found = (r.stdout || '').split(/\r?\n/).filter(Boolean);
+  const found = pathHits('claude');
   const onPath = PLATFORM === 'windows' ? found.find((f) => /\.exe$/i.test(f)) || found.find((f) => /\.cmd$/i.test(f)) : found[0];
-  const picked = onPath || cands.find((c) => fs.existsSync(c)) || 'claude';
+  const picked = onPath || cands.find((c) => fs.existsSync(c));
+  if (!picked) return 'claude';
   return (claudeCmd = PLATFORM === 'windows' ? resolveWinCmd(picked) : picked);
 }
 
@@ -201,8 +217,8 @@ export function cliSpawnArgs(bin, args) {
 // 이 PC 점검: 사용자 폴더 이름과 AI 실행 방법
 export function pcCheck() {
   const home = os.homedir();
-  const how = (b) => (!b || b === 'claude' && !fs.existsSync(b) && PLATFORM === 'windows' ? 'none' : /\.cmd$/i.test(b) ? 'cmd' : 'direct');
+  const how = (b) => (!b || (b === 'claude' || b === 'codex') && !fs.existsSync(b) ? 'none' : /\.cmd$/i.test(b) ? 'cmd' : 'direct');
   const cl = claudeCommand(); let ax = null; try { ax = asideCommand(); } catch {}
   let cx = null; try { const [b, pre] = codexCommand(); cx = pre[0] || b; } catch {}
-  return { platform: PLATFORM, home, oddHome: /\s|[^\x00-\x7F]/.test(home), claude: { path: cl, how: how(cl) }, codex: { path: cx, how: cx ? 'direct' : 'none' }, aside: { path: ax, how: ax ? how(ax) : 'none' } };
+  return { platform: PLATFORM, home, oddHome: /\s|[^\x00-\x7F]/.test(home), claude: { path: cl, how: how(cl) }, codex: { path: cx, how: cx ? how(cx) : 'none' }, aside: { path: ax, how: ax ? how(ax) : 'none' } };
 }
