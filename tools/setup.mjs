@@ -36,18 +36,11 @@ myRulesFile(); ensureMy();
   fs.writeFileSync(cfg, t, { encoding: 'utf8' }); console.log('  내 자료 폴더 쓰기·인터넷 허용');
 }
 
-// 2) Codex 로그인: 이미 로그인된 PC면 로그인 파일을 복사, 아니면 브라우저 로그인
+// 2) Codex 로그인: 허브는 자기 로그인만 쓴다. 개인 Codex 로그인 파일(~/.codex/auth.json)을 복사하지 않는다.
+//    리프레시 토큰은 한 번만 쓸 수 있어서, 복사본 둘 중 하나가 갱신하면 다른 쪽(허브 또는 개인 Codex 앱)이 끊긴다(11-22 실측).
+//    설치 중에는 로그인 창을 띄우지 않는다. 허브를 연 뒤 설정 › AI 로그인에서 한 번 로그인한다.
 const auth = path.join(codexHome(), 'auth.json');
-const userAuth = path.join(process.env.CODEX_HOME_USER || path.join(os.homedir(), '.codex'), 'auth.json');
-if (!fs.existsSync(auth)) {
-  if (fs.existsSync(userAuth)) { fs.copyFileSync(userAuth, auth); console.log('  기존 Codex 로그인을 허브에 붙임'); }
-  else {
-    // Codex가 없거나 로그인을 미루면 건너뛴다. 허브 설정 › AI 로그인에서 나중에 할 수 있다.
-    if (process.env.AIHUB_SKIP_LOGIN) console.log('  Codex 로그인은 나중에(허브 설정 › AI 로그인)');
-    else try { const [bin, pre] = codexCommand(); console.log('  Codex 로그인이 필요합니다. 브라우저가 열리면 로그인하세요.'); spawnSync(bin, [...pre, 'login'], { stdio: 'inherit', env: codexEnv() }); }
-    catch { console.log('  Codex가 이 PC에 없어요. Claude만으로도 허브는 돌아가요.'); }
-  }
-}
+if (!fs.existsSync(auth)) console.log('  Codex 로그인은 AI 학교 허브를 연 뒤 설정 › AI 로그인에서 한 번 해 주세요(허브 전용 로그인).');
 
 // 3) 허브 스킬·규칙
 const sync = spawnSync(process.execPath, [path.join(REPO, 'tools', 'skills-sync.mjs')], { stdio: 'inherit', env: { ...process.env, AIHUB_HOME: hubHome() } });

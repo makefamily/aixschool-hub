@@ -215,8 +215,8 @@ function finish(id, code, err) {
   const t = readTask(id);
   t.status = code === 0 ? 'done' : 'error';
   if (r && r.stopped) { t.status = 'done'; pushMsg(t, { role: 'warn', text: '멈췄어요. 이어서 하려면 다시 말을 보내 주세요.' }); }
-  else if (code !== 0) { const f = friendlyError(t.runtime, err); pushMsg(t, { role: 'warn', kind: f.kind, text: f.text, detail: String(err).trim().split('\n').slice(-3).join(' ').slice(0, 300) }); }
-  else writeTask(t);
+  else if (code !== 0) { const f = friendlyError(t.runtime, err); if (t.runtime === 'codex' && !t.codexPersonal && STALE_RE.test(String(err || ''))) { markCodexStale(); f.kind = 'login'; f.text = 'Codex 로그인이 끊겼어요. 설정 › AI 로그인에서 다시 로그인한 뒤 보내 주세요.'; refreshAuth(true); } pushMsg(t, { role: 'warn', kind: f.kind, text: f.text, detail: String(err).trim().split('\n').slice(-3).join(' ').slice(0, 300) }); }
+  else { writeTask(t); if (t.runtime === 'codex' && !t.codexPersonal && codexStale()) { clearCodexStale(); refreshAuth(true); } }
   emit({ type: 'status', task: id, status: t.status });
   usageCache.codex.at = 0; // 다음 조회 때 남은 양 새로 읽기
   const fn = afterTurn.get(id); if (fn) { afterTurn.delete(id); try { fn(code); } catch (e) { console.error('[이어가기 오류]', e); } }
@@ -391,6 +391,30 @@ function cap(cmd, args, opt = {}) {
   });
 }
 let authCache = null;
+// 허브 Codex 로그인 끊김 표시: Codex 실행이 '리프레시 토큰 이미 사용됨/취소됨/401'로 실패하면 표시 파일을 남긴다.
+// `codex login status`는 로그인 파일만 읽어서 끊긴 로그인도 '로그인됨'으로 보이기 때문(실측 M1·likim, 11-22).
+// 다시 로그인해 auth.json이 새로 써지면(표시 파일보다 새것) 끊김 표시는 무시된다.
+const STALE_RE = /refresh token (was )?(already used|revoked|expired)|could not be refreshed|unauthori[sz]ed \(401\)|\b401\b/i;
+const staleFile = () => path.join(codexHome(), '.hub-login-stale');
+function codexStale() {
+  try { const st = fs.statSync(staleFile()); const a = fs.statSync(path.join(codexHome(), 'auth.json')); return st.mtimeMs >= a.mtimeMs; } catch { return false; }
+}
+function markCodexStale() { try { fs.mkdirSync(codexHome(), { recursive: true }); fs.writeFileSync(staleFile(), new Date().toISOString()); } catch {} }
+function clearCodexStale() { try { fs.unlinkSync(staleFile()); } catch {} }
+// 예전 설치는 개인 Codex 로그인 파일(~/.codex/auth.json)을 허브로 복사했다. 리프레시 토큰은 한 번만 쓸 수 있어서
+// 한쪽이 갱신하면 다른 쪽(허브 또는 개인 Codex)이 끊긴다. 아직 안 갈라진 복사본이면 허브 쪽만 지운다(개인 파일은 건드리지 않음, 값은 출력 안 함).
+function dropCopiedCodexLogin() {
+  try {
+    const hub = path.join(codexHome(), 'auth.json');
+    const user = path.join(process.env.CODEX_HOME_USER || path.join(os.homedir(), '.codex'), 'auth.json');
+    if (!fs.existsSync(hub) || !fs.existsSync(user) || path.resolve(hub) === path.resolve(user)) return false;
+    const rt = (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8'))?.tokens?.refresh_token || null; } catch { return null; } };
+    const a = rt(hub), b = rt(user);
+    if (a && b && a === b) { fs.unlinkSync(hub); console.log('[로그인] 허브 Codex 로그인이 개인 로그인 복사본이라 허브 쪽만 지움 → 설정 › AI 로그인에서 허브 로그인 필요'); return true; }
+  } catch (e) { console.error('[로그인] 복사본 확인 실패', e.message); }
+  return false;
+}
+dropCopiedCodexLogin();
 async function authStatus() {
   // 처음 실행은 오래 걸릴 수 있어(새로 깐 프로그램 검사) 넉넉히 기다린다. 늦는 것과 없는 것은 다르게 알려 준다.
   let c;
@@ -406,6 +430,10 @@ async function authStatus() {
   const cSlow = c.error?.code === 'TIMEOUT', cKnown = /logged in/i.test(ctext);
   const clSlow = cl.error?.code === 'TIMEOUT', clKnown = !!clj || /logged in|not logged/i.test(cltext);
   const codex = { ok: c.status === 0 && cKnown, installed: cSlow || cKnown, text: cSlow ? slow : /logged in using chatgpt/i.test(ctext) ? 'ChatGPT 계정으로 로그인됨' : /not logged/i.test(ctext) ? '로그인 안 됨' : cKnown ? ctext.split('\n').pop().slice(0, 120) : c.error?.code === 'ENOENT' ? 'Codex 프로그램이 없어요' : 'Codex 프로그램이 제대로 실행되지 않아요' };
+  if (codex.installed && !cSlow) {
+    if (!fs.existsSync(path.join(codexHome(), 'auth.json'))) Object.assign(codex, { ok: false, text: '허브용 Codex 로그인이 필요해요' });
+    else if (codexStale()) Object.assign(codex, { ok: false, stale: true, text: '로그인이 끊겼어요. 다시 로그인해 주세요' });
+  }
   const claude = { ok: cl.status === 0 && /"loggedIn":\s*true|logged in/i.test(cltext) && !/not logged/i.test(cltext), installed: clSlow || clKnown, text: clSlow ? slow : clKnown ? clnice || cltext.split('\n').slice(0, 3).join(' ').slice(0, 160) : cl.error?.code === 'ENOENT' ? 'Claude 프로그램이 없어요' : 'Claude 프로그램이 제대로 실행되지 않아요' };
   if (!codex.installed && !cSlow) console.error(`[로그인 확인] Codex 실행 안 됨 · ${(c.error?.message || ctext).split('\n')[0].slice(0, 200)}`);
   if (!claude.installed && !clSlow) console.error(`[로그인 확인] Claude 실행 안 됨 · ${(cl.error?.message || cltext).split('\n')[0].slice(0, 200)}`);
