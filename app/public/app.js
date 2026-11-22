@@ -6,7 +6,9 @@ const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ic = (id, cls = '') => `<svg class="i ${cls}"><use href="#${id}"/></svg>`;
 const api = async (url, opt = {}) => { const r = await fetch(url, { headers: { 'content-type': 'application/json' }, ...opt, body: opt.body ? JSON.stringify(opt.body) : undefined }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.msg || `오류 ${r.status}`); return j; };
-const S = { st: null, view: 'today', taskId: null, task: null, files: [], sideTab: 'preview', previewSrc: '', mdText: null, usage: null, q: '', res: [], setTab: 'ai', scan: null, scanBusy: false, pane: 'list', learnBusy: false, pending: [], rules: null, auth: null, dir: {}, staff: null, skills: null, prefill: null, my: null, conns: null, oss: null, login: {} };
+const S = { st: null, view: 'today', taskId: null, task: null, files: [], sideTab: 'preview', previewSrc: '', mdText: null, usage: null, q: '', res: [], setTab: 'ai', scan: null, scanBusy: false, pane: 'list', learnBusy: false, pending: [], rules: null, auth: null, dir: {}, staff: null, skills: null, prefill: null, my: null, conns: null, oss: null, login: {}, split: false, splitIds: [], splitTasks: {} };
+try { const v = JSON.parse(localStorage.getItem('split') || 'null'); if (v) { S.split = !!v.on; S.splitIds = (v.ids || []).slice(0, 4); } } catch {}
+function saveSplit() { try { localStorage.setItem('split', JSON.stringify({ on: S.split, ids: S.splitIds })); } catch {} }
 function toast(t) { const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 3600); }
 const ago = (iso) => { if (!iso) return ''; const m = Math.round((Date.now() - new Date(iso)) / 60000); return m < 1 ? '방금' : m < 60 ? `${m}분 전` : m < 1440 ? `${Math.round(m / 60)}시간 전` : `${Math.round(m / 1440)}일 전`; };
 const stLabel = (s) => ({ working: ['work', '하는 중'], done: ['done', '끝남'], error: ['late', '오류'], idle: ['done', '새 작업'] }[s] || ['done', s]);
@@ -154,12 +156,43 @@ function workView() {
   const list = S.st.tasks;
   const groups = []; for (const t of list) { const k = t.status === 'working' ? 'AI가 하는 중' : weekKey(t.updated); let g = groups.find((x) => x.k === k); if (!g) groups.push((g = { k, items: [] })); g.items.push(t); }
   groups.sort((a, b) => (a.k === 'AI가 하는 중' ? -1 : b.k === 'AI가 하는 중' ? 1 : 0));
-  const row = (t) => `<button class="row ${t.id === S.taskId ? 'on' : ''}" data-act="open" data-id="${t.id}"><span class="dot ${t.status === 'working' ? 'work' : t.status === 'error' ? 'err' : 'idle'}" style="margin-top:8px"></span><div style="min-width:0"><div class="t">${esc(t.title)}</div><div class="m">${rtName(t.runtime)} · ${ago(t.updated)}</div></div></button>`;
-  const rail = `<div class="rail"><div class="lbl">내 작업</div>${searchBox()}
+  const row = (t) => `<button class="row ${(S.split ? S.splitIds.includes(t.id) : t.id === S.taskId) ? 'on' : ''}" data-act="open" data-id="${t.id}"><span class="dot ${t.status === 'working' ? 'work' : t.status === 'error' ? 'err' : 'idle'}" style="margin-top:8px"></span><div style="min-width:0"><div class="t">${esc(t.title)}</div><div class="m">${rtName(t.runtime)} · ${ago(t.updated)}</div></div></button>`;
+  const rail = `<div class="rail"><div class="lbl" style="display:flex;align-items:center">내 작업<span class="sp" style="flex:1"></span><button class="btn ${S.split ? 'dark' : ''}" data-act="split" title="대화 여러 개를 한 화면에 나란히 봐요">${ic('layers', 's')}${S.split ? '나란히 보기 끄기' : '나란히 보기'}</button></div>${S.split ? '<p class="crumb" style="margin:-4px 0 0">작업을 누르면 오른쪽 칸에 들어가요. 최대 4개까지요.</p>' : ''}${searchBox()}
    <details ${list.length ? '' : 'open'}><summary class="lbl" style="cursor:pointer">${ic('plus', 's')}새 작업</summary>${newTaskForm('work')}</details>
    ${groups.map((g) => `<div><div class="lbl">${g.k}</div>${g.items.map(row).join('')}</div>`).join('')}
    ${!list.length ? '<p class="empty">아직 작업이 없어요. 위 새 작업에서 맡겨 보세요.</p>' : ''}</div>`;
+  if (S.split) return `<div class="body split" data-pane="${S.pane === 'list' ? 'list' : 'chat'}">${rail}${splitHtml()}</div>`;
   return `<div class="body ${S.wide ? 'wide' : ''}" data-pane="${S.pane}" style="${S.sideW ? `--side-w:${S.sideW}px` : ''}">${rail}${S.task ? taskMain() + `<div class="resizer" data-drag="side" title="끌어서 미리보기 폭 바꾸기"></div>` + sidePanel() : `<div class="mainc"><div class="page" style="background:var(--card)"><p class="empty">왼쪽에서 작업을 고르거나 새로 맡기세요.</p></div></div>`}</div>`;
+}
+// 나란히 보기: 대화 2~4개를 칸으로 나눠 보고 칸마다 바로 보낸다
+function splitHtml() {
+  const ids = S.splitIds;
+  const pane = (id) => {
+    const t = S.splitTasks[id]; if (!t) { if (!(S.splitLoading ||= new Set()).has(id)) { S.splitLoading.add(id); loadSplit(id).then(() => { S.splitLoading.delete(id); render(); }); } return `<div class="spl"><p class="empty" style="padding:16px">불러오는 중…</p></div>`; }
+    const busy = t.status === 'working';
+    return `<div class="spl" data-id="${id}"><div class="th"><button class="btn mob-only" data-act="pane" data-p="list" aria-label="목록으로">${ic('back', 's')}</button><span class="dot ${busy ? 'work' : t.status === 'error' ? 'err' : 'idle'}"></span><h3 title="${esc(t.title)}">${esc(t.title)}</h3><span class="chip">${rtName(t.runtime)}</span>${busy ? '<span class="st work">AI가 일하는 중</span>' : ''}<span class="sp"></span><button class="btn" data-act="splone" data-id="${id}" title="이 대화만 크게 보기">${ic('eye', 's')}</button><button class="btn" data-act="splx" data-id="${id}" title="이 칸 닫기" aria-label="이 칸 닫기">×</button></div>
+     <div class="chat" data-chat="${id}">${chatHtml(t) || '<p class="empty">아직 대화가 없어요.</p>'}${busy ? '<div class="typing">AI가 일하는 중이에요…</div>' : ''}</div>
+     <div class="comp"><form class="box" data-form="psend" data-id="${id}"><textarea name="text" aria-label="메시지" placeholder="이어서 할 말 · Enter로 보내기" ${busy ? 'disabled' : ''}></textarea><div class="ctl"><span class="sp"></span>${busy ? `<button type="button" class="btn" data-act="pstop" data-id="${id}">${ic('stop', 's')}멈추기</button>` : `<button class="send" aria-label="보내기">${ic('up')}</button>`}</div></form></div></div>`;
+  };
+  const slots = ids.map(pane);
+  if (ids.length < 2) slots.push(`<div class="spl slot"><p class="empty">왼쪽 목록에서 작업을 누르면<br>이 칸에 들어와요.</p></div>`);
+  return `<div class="splitgrid" data-n="${slots.length}">${slots.join('')}</div>`;
+}
+async function loadSplit(id) { try { S.splitTasks[id] = await api(`/api/tasks/${id}`); } catch { S.splitIds = S.splitIds.filter((x) => x !== id); delete S.splitTasks[id]; saveSplit(); } }
+async function addSplit(id) {
+  if (!S.splitIds.includes(id)) { if (S.splitIds.length >= 4) S.splitIds.pop(); S.splitIds.push(id); saveSplit(); }
+  await loadSplit(id); S.pane = 'chat'; render();
+}
+async function toggleSplit() {
+  S.split = !S.split;
+  if (S.split) {
+    const known = new Set(S.st.tasks.map((t) => t.id)); S.splitIds = S.splitIds.filter((x) => known.has(x));
+    if (S.taskId && !S.splitIds.includes(S.taskId)) S.splitIds.unshift(S.taskId);
+    for (const t of S.st.tasks) { if (S.splitIds.length >= 2) break; if (!S.splitIds.includes(t.id)) S.splitIds.push(t.id); }
+    S.splitIds = S.splitIds.slice(0, 4);
+    await Promise.all(S.splitIds.map(loadSplit));
+  }
+  saveSplit(); S.view = 'work'; S.pane = 'chat'; render();
 }
 // 대화: 이어진 '실행' 줄은 접어서 "작업 과정 N단계"로, 스킬 사용·파일은 한 줄씩 보이게
 function chatHtml(t) {
@@ -224,7 +257,7 @@ function settingsView() {
   const nav = `<div class="nav">${tabs.map(([k, n]) => `<button class="ni ${S.setTab === k ? 'on' : ''}" data-act="settab" data-tab="${k}">${n}${k === 'learn' && S.st.pending ? `<span class="c num">${S.st.pending}</span>` : ''}</button>`).join('')}</div>`;
   let page = '';
   const back = `<button class="btn mob-only" data-act="pane" data-p="nav" style="margin-bottom:12px">${ic('back', 's')}설정</button>`;
-  if (S.setTab === 'me') page = `<h2>내 정보</h2><p class="lead">허브 화면에 보이는 이름이에요. 이 PC 밖으로 나가지 않아요.</p><form data-form="me" class="card" style="max-width:480px;display:flex;flex-direction:column;gap:10px"><div class="field"><input name="me" value="${esc(S.st.me)}" placeholder="이름" aria-label="이름"></div><button class="btn dark" style="align-self:flex-start">저장</button></form>`;
+  if (S.setTab === 'me') page = `<h2>내 정보</h2><p class="lead">허브 화면에 보이는 이름이에요. 이 PC 밖으로 나가지 않아요.</p><form data-form="me" class="card" style="max-width:480px;display:flex;flex-direction:column;gap:10px"><div class="field"><input name="me" value="${esc(S.st.me)}" placeholder="이름" aria-label="이름"></div><button class="btn dark" style="align-self:flex-start">저장</button></form><div class="card" style="max-width:480px;margin-top:12px"><h4>허브 안내</h4><p class="md">처음 열었을 때 나온 안내를 다시 봐요.</p><div class="acts"><button class="btn" data-act="introshow">안내 다시 보기</button></div></div>`;
   if (S.setTab === 'ai') page = `<h2>AI 로그인</h2><p class="lead">허브는 내 구독으로 일해요. 둘 중 하나만 로그인돼 있어도 돼요. 로그인을 누르면 브라우저에 로그인 창이 열리고, 마치면 여기가 자동으로 바뀌어요.</p>${S.auth ? [['codex', 'Codex (ChatGPT 구독)'], ['claude', 'Claude (Claude 구독)']].map(([w, n]) => { const a = S.auth[w] || {}; const L = S.login[w]; const busy = L && ['opening', 'waiting', 'checking'].includes(L.state); return `<div class="card" style="max-width:640px;margin-bottom:12px"><h4>${n}<span class="r"><span class="st ${a.ok ? 'work' : 'wait'}">${a.ok ? '로그인됨' : busy ? '로그인하는 중' : a.installed ? '로그인 필요' : '프로그램 없음'}</span></span></h4><p class="md">${esc(a.text || '')}</p>${busy ? '' : `<div class="acts">${a.installed ? `<button class="btn ${a.ok ? '' : 'pri'}" data-act="authlogin" data-who="${w}">${a.ok ? '다시 로그인' : '로그인'}</button>${a.ok ? `<button class="btn" data-act="authlogout" data-who="${w}">로그아웃</button>` : ''}` : '<span class="crumb">강사에게 설치를 부탁하세요. 설치한 뒤 아래 다시 확인을 누르면 로그인 버튼이 나와요.</span>'}</div>`}${loginBox(w, L)}</div>`; }).join('') + `<button class="btn" data-act="authrefresh">${ic('refresh', 's')}다시 확인</button>` + pcCard(S.auth.pc) : '<p class="empty">확인하는 중…</p>'}`;
   if (S.setTab === 'conn') page = connPage();
   if (S.setTab === 'skills') page = skillsPage();
@@ -327,17 +360,31 @@ function mtab() { const b = (v, icon, n) => `<button class="${S.view === v ? 'on
 function render() {
   if (!S.st) return;
   const draft = $('[data-form=send] textarea')?.value;
+  const pdrafts = [...document.querySelectorAll('[data-form=psend]')].map((f) => [f.dataset.id, f.elements.text.value, document.activeElement === f.elements.text]);
+  const pscroll = Object.fromEntries([...document.querySelectorAll('[data-chat]')].map((c) => [c.dataset.chat, c.scrollHeight - c.scrollTop - c.clientHeight < 40]));
   const forms = [...document.querySelectorAll('[data-form=newtask]')].map((f) => [f.dataset.where, f.elements.title.value, f.elements.text.value, f.elements.runtime.value]);
   const foc = document.activeElement; const focSel = foc?.dataset?.dirq ? `[data-dirq="${foc.dataset.dirq}"]` : foc?.form?.dataset?.form === 'newtask' ? `[data-form=newtask][data-where="${foc.form.dataset.where}"] [name="${foc.name}"]` : null;
   const body = S.view === 'today' ? `<div class="body">${todayView()}</div>` : S.view === 'work' ? workView() : S.view === 'staff' ? `<div class="body">${staffView()}</div>` : settingsView();
-  $('#root').innerHTML = topbar() + updBar() + body + `<div class="sb" id="sb">${sbHtml()}</div>` + mtab() + (!S.st.me ? meModal() : '');
+  $('#root').innerHTML = topbar() + updBar() + body + `<div class="sb" id="sb">${sbHtml()}</div>` + mtab() + (!S.st.me ? meModal() : (!S.st.introSeen || S.introOpen) ? introModal() : '');
   if (!S.prefill) for (const [w, ti, tx, rt] of forms) { const f = $(`[data-form=newtask][data-where="${w}"]`); if (f) { const E = f.elements; E.title.value = ti; E.text.value = tx; if (!E.runtime.querySelector(`option[value="${rt}"]`)?.disabled) E.runtime.value = rt; } }
   S.prefill = null;
   if (focSel) { const el = $(focSel); if (el) { el.focus(); try { const n = el.value.length; el.setSelectionRange(n, n); } catch {} } }
   const c = $('#chat'); if (c) c.scrollTop = c.scrollHeight;
+  for (const el of document.querySelectorAll('[data-chat]')) if (pscroll[el.dataset.chat] !== false) el.scrollTop = el.scrollHeight;
+  for (const [id, v, f] of pdrafts) { const el = $(`[data-form=psend][data-id="${id}"] textarea`); if (el) { if (v) el.value = v; if (f) el.focus(); } }
   const ta = $('[data-form=send] textarea'); if (ta && draft) ta.value = draft;
   placeNative();
 }
+const INTRO_SAY = '오늘 한 일 메모야. 이걸로 스레드 글 2개 써줘.\n\n(여기에 오늘 한 일을 적거나 붙여 넣기)';
+function introModal() {
+  return `<div class="modal"><div class="card intro"><h4>AI 학교 허브는 이럴 때 쓰세요</h4>
+   <ul class="introl"><li>AI에게 일을 맡기고, AI가 만든 글이나 페이지를 바로 옆 화면에서 봐요.</li><li>AI 직원 24명이 들어 있어요. 총괄 비서에게 말하면 필요한 직원을 알아서 불러요.</li><li>한 번 말한 내 방식은 규칙으로 쌓여서 다음 일부터 지켜요.</li></ul>
+   <p class="md">터미널로 이미 잘 쓰고 계시면 그대로 쓰셔도 돼요. 만든 걸 눈으로 보면서 하고 싶을 때 허브를 여시면 돼요.</p>
+   <div class="introex"><b>처음엔 이렇게 맡겨 보세요</b><p class="md">저는 그날 한 일을 메모해 두고, 그 메모로 스레드 글을 써요.</p><div class="u">오늘 한 일 메모야. 이걸로 스레드 글 2개 써줘.</div></div>
+   <div class="acts"><button class="btn dark" data-act="introstart">이 문장으로 시작하기</button><button class="btn" data-act="introclose">닫기</button></div>
+   <p class="crumb">이 안내는 설정 › 내 정보에서 다시 볼 수 있어요.</p></div></div>`;
+}
+async function closeIntro() { S.introOpen = false; if (!S.st.introSeen) { S.st.introSeen = true; try { await api('/api/intro', { method: 'POST', body: { seen: true } }); } catch {} } }
 function meModal() { return `<div class="modal"><form class="card" data-form="me"><h4>처음 오셨어요</h4><p class="md" style="margin-bottom:10px">허브에서 부를 이름을 적어 주세요. 이 PC 밖으로 나가지 않아요.</p><div class="field" style="margin-bottom:12px"><input name="me" placeholder="이름" aria-label="이름" required></div><button class="btn dark">시작</button></form></div>`; }
 
 // ── 누르기 ──
@@ -351,7 +398,14 @@ document.addEventListener('click', async (e) => {
     else if (a === 'updlater') { S.updHide = S.upd?.latest; render(); }
     else if (a === 'settings') { S.view = 'settings'; if (b.dataset.tab) { S.setTab = b.dataset.tab; S.pane = 'page'; } else S.pane = 'nav'; render(); loadSetTab(); }
     else if (a === 'settab') { S.setTab = b.dataset.tab; S.pane = 'page'; render(); loadSetTab(); }
-    else if (a === 'open') { if (b.dataset.id) await openTask(b.dataset.id); }
+    else if (a === 'open') { if (b.dataset.id) { if (S.split && S.view === 'work' && b.classList.contains('row')) await addSplit(b.dataset.id); else { if (S.split) { S.split = false; saveSplit(); } await openTask(b.dataset.id); } } }
+    else if (a === 'split') await toggleSplit();
+    else if (a === 'introclose') { await closeIntro(); render(); }
+    else if (a === 'introshow') { S.introOpen = true; render(); }
+    else if (a === 'introstart') { await closeIntro(); S.view = 'today'; S.prefill = { where: 'today', title: '오늘 한 일로 스레드 글', text: INTRO_SAY }; render(); setTimeout(() => { const ta = $('[data-form=newtask][data-where=today] textarea'); if (ta) { ta.focus(); const i = ta.value.indexOf('('); if (i > 0) ta.setSelectionRange(i, ta.value.length); } }, 30); }
+    else if (a === 'splx') { S.splitIds = S.splitIds.filter((x) => x !== b.dataset.id); delete S.splitTasks[b.dataset.id]; saveSplit(); render(); }
+    else if (a === 'splone') { S.split = false; saveSplit(); await openTask(b.dataset.id); }
+    else if (a === 'pstop') { b.disabled = true; await api(`/api/tasks/${b.dataset.id}/stop`, { method: 'POST' }); }
     else if (a === 'dirtoggle') { const w = b.dataset.where; const d = (S.dir[w] = S.dir[w] || {}); d.open = !d.open; render(); if (d.open) { setTimeout(() => $(`[data-dirq="${w}"]`)?.focus(), 30); loadDirs(w, d.q || ''); } }
     else if (a === 'dirpick') { const w = b.dataset.where; const d = (S.dir[w] = S.dir[w] || {}); d.path = b.dataset.path; d.open = false; render(); }
     else if (a === 'ctxgo') { await api(`/api/tasks/${S.taskId}/continue`, { method: 'POST' }); toast('지금 AI가 정리 카드를 쓰는 중이에요. 끝나면 새 대화가 열려요'); await openTask(S.taskId, true); render(); }
@@ -388,7 +442,7 @@ document.addEventListener('change', async (e) => { const el = e.target; if (el.d
 document.addEventListener('input', (e) => { const el = e.target; if (el.dataset.dirq) { clearTimeout(dirTimer); const w = el.dataset.dirq, v = el.value; dirTimer = setTimeout(() => loadDirs(w, v), 180); } });
 document.addEventListener('keydown', (e) => {
   if (e.target.dataset?.dirq && e.key === 'Enter') { e.preventDefault(); const first = document.querySelector(`[data-dirlist="${e.target.dataset.dirq}"] .dirrow:nth-child(2)`); if (first) first.click(); return; }
-  if (e.target.matches('[data-form=send] textarea') && e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); e.target.form.requestSubmit(); }
+  if (e.target.matches('[data-form=send] textarea, [data-form=psend] textarea') && e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); e.target.form.requestSubmit(); }
 });
 // 미리보기 폭 끌어서 바꾸기
 document.addEventListener('pointerdown', (e) => {
@@ -403,6 +457,7 @@ document.addEventListener('submit', async (e) => {
   try {
     if (k === 'search') { S.q = d.q; S.res = d.q ? await api(`/api/search?q=${encodeURIComponent(d.q)}`) : []; render(); }
     else if (k === 'newtask') { if (!d.runtime) return toast('먼저 설정 › AI 로그인에서 로그인해 주세요'); const t = await api('/api/tasks', { method: 'POST', body: d }); f.reset(); S.dir[f.dataset.where] = {}; await load(); await openTask(t.id); }
+    else if (k === 'psend') { if (!d.text.trim()) return; const id = f.dataset.id; f.querySelector('textarea').value = ''; await api(`/api/tasks/${id}/send`, { method: 'POST', body: { text: d.text } }); await loadSplit(id); render(); }
     else if (k === 'send') { if (!d.text.trim()) return; f.querySelector('textarea').value = ''; await api(`/api/tasks/${S.taskId}/send`, { method: 'POST', body: { text: d.text } }); await openTask(S.taskId, true); render(); }
     else if (k === 'url') { let u = d.u.trim(); if (!u) return; if (!/^(https?:|\/)/.test(u)) u = /\.\w{1,5}$/.test(u) && !/^www\./.test(u) && S.files.some((x) => x.name === u) ? fileUrl(u) : 'https://' + u; await setPreview(u); render(); }
     else if (k === 'me') { await api('/api/me', { method: 'POST', body: d }); await load(); const a = S.st.auth; if (a && !a.codex && !a.claude) { S.view = 'settings'; S.setTab = 'ai'; S.pane = 'page'; render(); loadSetTab(); toast('먼저 AI 로그인을 해 주세요'); } else toast('오늘 탭의 새로 맡기기에서 첫 일을 맡겨 보세요'); }
@@ -425,6 +480,8 @@ async function loadSetTab() {
 const es = new EventSource('/api/events');
 es.onmessage = async (m) => {
   const ev = JSON.parse(m.data);
+  if (ev.type === 'msg' && S.split && S.splitTasks[ev.task]) { S.splitTasks[ev.task].messages.push(ev.msg); if (S.view === 'work') render(); }
+  if (ev.type === 'status' && S.split && S.splitTasks[ev.task]) await loadSplit(ev.task);
   if (ev.type === 'msg' && ev.task === S.taskId && S.task) { S.task.messages.push(ev.msg); if (ev.msg.kind === 'file' || ev.msg.text?.startsWith('파일')) S.files = await api(`/api/tasks/${S.taskId}/files`); render(); }
   if (ev.type === 'status') { await load(); if (ev.task === S.taskId && ev.status !== 'working') { S.files = await api(`/api/tasks/${S.taskId}/files`); const h = S.files.find((f) => /\.html?$/i.test(f.name)); if (h && !S.previewSrc) await setPreview(fileUrl(h.name)); render(); loadUsage(); } }
   if (ev.type === 'update') {

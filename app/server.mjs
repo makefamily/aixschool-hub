@@ -16,6 +16,8 @@ import * as upd from '../tools/update.mjs';
 // 허브를 다른 AI 창(Orca·Claude Code 터미널)에서 켰을 때 따라온 그 창의 표시를 지운다.
 // 남겨 두면 허브가 돌린 대화가 사람이 연 대화처럼 기록되고, 하던 일 목록에 섞인다.
 for (const k of Object.keys(process.env)) if (/^(CLAUDECODE|CLAUDE_CODE_|ORCA_)/.test(k)) delete process.env[k];
+// 켠 쪽 PC에 유료 API 키가 있으면 Claude·Codex가 구독 대신 그 키로 돌아 요금이 나간다 → 허브는 늘 구독 로그인만 쓴다
+for (const k of ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'CODEX_API_KEY']) delete process.env[k];
 // 앱을 Finder·시작 메뉴로 열면 PATH가 짧다. 서버를 켠 Node의 폴더를 넣어 둬야 Node로 도는 프로그램(codex 등)이 Node를 찾는다.
 { const d = path.dirname(process.execPath); const cur = (process.env.PATH || '').split(path.delimiter); if (!cur.includes(d)) process.env.PATH = [d, ...cur].filter(Boolean).join(path.delimiter); }
 const PORT = Number(process.env.AIHUB_PORT || 7710);
@@ -634,7 +636,8 @@ const server = http.createServer(async (req, res) => {
   try {
     let m;
     if (p === '/api/events') { res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' }); res.write(': ok\n\n'); clients.add(res); req.on('close', () => clients.delete(res)); return; }
-    if (p === '/api/state' && req.method === 'GET') return json(res, 200, { me: conf.me, team: conf.team, platform: PLATFORM, teams: TEAMS, tasks: allTasks().map(({ messages, ...t }) => ({ ...t, last: messages.at(-1)?.text?.slice(0, 80) || '', count: messages.length })), learnConsent: conf.learnConsent, pending: learn.pending(hubHome()).length, auth: authCache ? { codex: authCache.codex, claude: authCache.claude } : null });
+    if (p === '/api/state' && req.method === 'GET') return json(res, 200, { me: conf.me, team: conf.team, platform: PLATFORM, teams: TEAMS, tasks: allTasks().map(({ messages, ...t }) => ({ ...t, last: messages.at(-1)?.text?.slice(0, 80) || '', count: messages.length })), learnConsent: conf.learnConsent, introSeen: !!conf.introSeen, pending: learn.pending(hubHome()).length, auth: authCache ? { codex: authCache.codex, claude: authCache.claude } : null });
+    if (p === '/api/intro' && req.method === 'POST') { const b = await body(req); conf.introSeen = b.seen !== false; saveConf(); return json(res, 200, { ok: true, seen: conf.introSeen }); }
     if (p === '/api/me' && req.method === 'POST') { const b = await body(req); conf.me = String(b.me || '').slice(0, 20); if (b.team) conf.team = b.team; saveConf(); return json(res, 200, { ok: true }); }
     if (p === '/api/usage') { const c = await codexUsage(); if (url.searchParams.get('claude') === '1') await claudeProbe(true); else claudeProbe(false); return json(res, 200, { codex: c, claude: usageCache.claude }); }
     if (p === '/api/search') return json(res, 200, search(url.searchParams.get('q')));
