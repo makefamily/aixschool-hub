@@ -651,6 +651,16 @@ function serveFile(res, file) {
   fs.createReadStream(file).pipe(res);
 }
 function authed(req) { const ip = req.socket.remoteAddress || ''; return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1'; }
+// 다른 사이트가 브라우저를 거쳐 이 PC의 허브를 부르지 못하게 한다: 주소(Host)가 이 허브가 아니거나, 다른 출처(Origin)에서 온 요청은 받지 않는다.
+function sameSite(req, p) {
+  const ok = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`]);
+  if (!ok.has(String(req.headers.host || '').toLowerCase())) return false;
+  const o = req.headers.origin;
+  if (o !== undefined && !ok.has(String(o).toLowerCase().replace(/^http:\/\//, ''))) return false;
+  const s = req.headers['sec-fetch-site'];
+  if (s && s !== 'same-origin' && s !== 'none' && p.startsWith('/api/')) return false;
+  return true;
+}
 function lanAddrs() {
   const r = [];
   for (const [n, list] of Object.entries(os.networkInterfaces())) for (const a of list || []) if (a.family === 'IPv4' && !a.internal) r.push({ name: n, ip: a.address, tailscale: a.address.startsWith('100.') });
@@ -661,6 +671,7 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   const p = decodeURIComponent(url.pathname);
   if (!authed(req)) { res.writeHead(403); return res.end('이 PC 안에서만 열려요'); }
+  if (!sameSite(req, p)) { res.writeHead(403); return res.end('허브 화면에서만 쓸 수 있어요'); }
   try {
     let m;
     if (p === '/api/events') { res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' }); res.write(': ok\n\n'); clients.add(res); req.on('close', () => clients.delete(res)); return; }
