@@ -31,8 +31,9 @@ if (!a.dry) {
   // AI 직원표: "블로그 마케터에게 맡겨" 같은 말을 어떤 스킬로 할지 AI가 알게
   let staff = '';
   try {
-    const st = JSON.parse(fs.readFileSync(path.join(REPO, 'skills', 'staff.json'), 'utf8')).staff || [];
-    staff = `\n\n## AI 직원표\n\n사용자가 직원 이름을 말하거나 그 직원의 일을 맡기면 짝 스킬을 불러 그 절차대로 한다.\n\n| 직원 | 하는 일 | 스킬 | 함께 쓰는 스킬 |\n|---|---|---|---|\n${st.map((x) => `| ${x.name} | ${x.role} | ${x.skill} | ${(x.with || []).join(', ')} |`).join('\n')}\n`;
+    const sj = JSON.parse(fs.readFileSync(path.join(REPO, 'skills', 'staff.json'), 'utf8')); const st = sj.staff || [];
+    const stage = (x) => { const g = (sj.stages || []).find((s) => s.id === x.stage); return g ? `${g.label.split(' · ')[0]} ${x.order}` : ''; };
+    staff = `\n\n## AI 직원표\n\n사용자가 직원 이름을 말하거나 그 직원의 일을 맡기면 짝 스킬을 불러 그 절차대로 한다.\n비즈니스는 유입(손님을 모으는 일)과 전환(손님이 사게 만드는 일)으로 나뉜다. '부류' 칸의 번호는 처음 쓰는 대표님에게 권하는 순서다.\n\n| 직원 | 부류 | 하는 일 | 스킬 | 함께 쓰는 스킬 |\n|---|---|---|---|---|\n${st.map((x) => `| ${x.name} | ${stage(x)} | ${x.role} | ${x.skill} | ${(x.with || []).join(', ')} |`).join('\n')}\n`;
   } catch {}
   fs.writeFileSync(path.join(codexHome(), 'AGENTS.md'), rules + staff + personal + note);
   fs.writeFileSync(path.join(workRoot(), 'CLAUDE.md'), rules + staff + personal + note);

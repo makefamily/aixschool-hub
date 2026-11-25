@@ -145,23 +145,24 @@ function renderUpd() {
 // ── 오늘 ──
 function todayView() {
   const working = S.st.tasks.filter((t) => t.status === 'working');
-  const recent = S.st.tasks.slice(0, 6);
+  const recent = S.st.tasks.slice(0, 5);
   const d = new Date(); const wd = '일월화수목금토'[d.getDay()];
-  return `<div class="page"><h2>${d.getMonth() + 1}월 ${d.getDate()}일 ${wd}요일</h2><p class="lead">${esc(S.st.me || '')}님, AI에게 맡긴 일과 결과물을 한곳에서 봐요.</p>
+  // 흔한 노트북 창(1280×800·1366×768)에서도 스크롤 없이 한 화면에: 0건 카드는 숨기고, 폴더·찾기는 최근 작업 머리로
+  const found = S.q ? searchResults() : '';
+  return `<div class="page"><h2>${d.getMonth() + 1}월 ${d.getDate()}일 ${wd}요일</h2>
   <div class="grid2"><div style="display:flex;flex-direction:column;gap:16px">
    <div class="card"><h4>총괄 비서에게 맡기기<span class="r">필요한 직원을 알아서 불러요</span></h4>${newTaskForm('today')}</div>
    ${myCard()}
-   <div class="card"><h4>AI가 하는 중<span class="r num">${working.length}건</span></h4>${working.map(taskWl).join('') || '<p class="empty">지금 하는 일이 없어요.</p>'}</div>
+   ${working.length ? `<div class="card"><h4>AI가 하는 중<span class="r num">${working.length}건</span></h4>${working.map(taskWl).join('')}</div>` : ''}
   </div><div style="display:flex;flex-direction:column;gap:16px">
-   <div class="card"><h4>작업 찾기</h4>${searchBox()}</div>
-   <div class="card"><h4>최근 작업</h4>${recent.map(taskWl).join('') || '<p class="empty">아직 작업이 없어요. 왼쪽에서 첫 일을 맡겨 보세요.</p>'}</div>
-   <div class="card"><h4>내 작업 폴더</h4><p class="md">맡긴 일의 결과물이 모두 이 폴더에 쌓여요.</p><div class="acts"><button class="btn" data-act="revealroot" data-what="folder">${ic('folder', 's')}폴더 열기</button><button class="btn" data-act="revealroot" data-what="terminal">${ic('term', 's')}터미널 열기</button></div></div>
+   <div class="card"><div class="rhead"><h4>최근 작업</h4><span class="sp"></span><button class="btn sm" data-act="revealroot" data-what="folder" title="맡긴 일의 결과물이 모두 이 폴더에 쌓여요">${ic('folder', 's')}폴더 열기</button><button class="btn sm" data-act="revealroot" data-what="terminal">${ic('term', 's')}터미널 열기</button></div>
+    ${searchForm()}${found || recent.map(taskWl).join('') || '<p class="empty">아직 작업이 없어요. 왼쪽에서 첫 일을 맡겨 보세요.</p>'}</div>
   </div></div></div>`;
 }
 function myCard() {
   const m = S.my; if (!m) return '';
-  return `<div class="card"><h4>내 자료<span class="r num">${m.done}/${m.total} 채움</span></h4><p class="md">AI가 일할 때 먼저 읽는 나만의 자료예요. 처음엔 비어 있어요. 내 글·생각·일을 채울수록 결과가 원하는 대로 나와요.</p>
-   <ul class="mylist">${m.items.map((x) => `<li class="${x.done ? 'ok' : ''}"><span class="st ${x.done ? 'work' : 'done'}">${x.done ? '채움' : '비어 있음'}</span>${esc(x.name)}</li>`).join('')}</ul>
+  return `<div class="card"><h4 title="AI가 일할 때 먼저 읽는 나만의 자료예요. 채울수록 결과가 원하는 대로 나와요">내 자료<span class="r num">${m.done}/${m.total} 채움</span></h4>
+   <ul class="mylist row1">${m.items.map((x) => `<li class="${x.done ? 'ok' : ''}"><span class="st ${x.done ? 'work' : 'done'}">${x.done ? '채움' : '비어 있음'}</span>${esc(x.name)}</li>`).join('')}</ul>
    <div class="acts"><button class="btn dark" data-act="myinterview">AI와 같이 채우기</button><button class="btn" data-act="myreveal">${ic('folder', 's')}폴더 열기</button></div></div>`;
 }
 const taskWl = (t) => { const [c, l] = stLabel(t.status); return `<button class="wl" data-act="open" data-id="${t.id}"><span class="st ${c}">${l}</span><div style="min-width:0"><b>${esc(t.title)}</b><small>${rtName(t.runtime)}${t.picked ? ` · ${esc(base(t.cwd))}` : ''} · ${ago(t.updated)}</small></div><span class="sp"></span>${ic('chev')}</button>`; };
@@ -200,6 +201,8 @@ function dirListHtml(where) {
 }
 let dirTimer;
 async function loadDirs(where, q) { const d = (S.dir[where] = S.dir[where] || {}); d.q = q; try { d.list = await api(`/api/dirs?q=${encodeURIComponent(q || '')}`); } catch { d.list = []; } const el = document.querySelector(`[data-dirlist="${where}"]`); if (el) el.innerHTML = dirListHtml(where); }
+const searchForm = () => `<form data-form="search" class="sform"><div class="field">${ic('search', 's')}<input name="q" value="${esc(S.q)}" placeholder="작업 찾기 · 이름·파일·대화 내용" aria-label="작업 찾기"></div></form>`;
+function searchResults() { return searchBox().replace(/^<form[\s\S]*?<\/form>\s*/, ''); }
 function searchBox() {
   return `<form data-form="search"><div class="field">${ic('search', 's')}<input name="q" value="${esc(S.q)}" placeholder="작업 이름·파일 이름·대화 내용"></div></form>
   <div style="margin-top:8px">${S.res.map((r) => `<button class="row" data-act="open" data-id="${esc(r.id || '')}"><span class="st done">${esc(r.kind === '태스크' ? '작업' : r.kind)}</span><div style="min-width:0"><div class="t">${esc(r.title)}</div><div class="m">${esc(r.sub || '')}</div></div></button>`).join('')}${S.q && !S.res.length ? '<p class="empty">찾은 게 없어요.</p>' : ''}</div>`;
@@ -271,7 +274,7 @@ function taskMain() {
   const band = pct != null && pct >= 50 && !t.continuedTo && !t.ctxDismissed && !busy ? `<div class="ctxband"><div><b>대화가 길어졌어요.</b> 더 길어지면 앞 내용을 흐리게 기억해요. 새 대화로 이어가면 지금 AI가 정리 카드를 쓰고, 같은 폴더의 새 대화가 그 카드부터 시작해요.</div><div class="acts" style="margin:0"><button class="btn dark" data-act="ctxgo">새 대화로 이어가기</button><button class="btn" data-act="ctxno">나중에</button></div></div>`
     : t.continuedTo ? `<div class="ctxband done"><div>이 대화는 새 대화로 이어졌어요.</div><button class="btn" data-act="open" data-id="${t.continuedTo}">이어진 대화 열기</button></div>` : '';
   return `<div class="mainc"><div class="th"><button class="btn mob-only" data-act="pane" data-p="list" aria-label="목록으로">${ic('back', 's')}</button><span class="dot ${busy ? 'work' : 'idle'}"></span><h3>${esc(t.title)}</h3>${rtChip(t)}${ctxChip(t)}<span class="sp"></span>
-   <button class="btn" data-act="reveal" data-what="folder" title="${esc(t.cwd)}">${ic('folder', 's')}폴더 열기</button><button class="btn" data-act="reveal" data-what="terminal">${ic('term', 's')}터미널 열기</button>
+   <button class="btn" data-act="reveal" data-what="folder" title="${esc(t.cwd)}">${ic('folder', 's')}폴더 열기</button><button class="btn" data-act="reveal" data-what="terminal" title="터미널 열기" aria-label="터미널 열기">${ic('term', 's')}터미널 열기</button>
    <button class="btn mob-only" data-act="pane" data-p="side" aria-label="미리보기">${ic('eye', 's')}</button></div>${band}
    <div class="chat" id="chat">${chatHtml(t) || '<p class="empty">아래에 맡길 일을 적어 주세요. 허브에 있는 AI 직원(스킬)을 AI가 알아서 불러 써요.</p>'}${busy ? '<div class="typing">AI가 일하는 중이에요…</div>' : ''}</div>
    <div class="comp"><form class="box" data-form="send">${attStrip('send-' + t.id)}<textarea name="text" aria-label="메시지" placeholder="이어서 할 말 · Enter로 보내기, Shift+Enter 줄바꿈 · 캡처는 붙여 넣기" ${busy ? 'disabled' : ''}></textarea>
@@ -296,15 +299,19 @@ function sidePanel() {
 // ── AI 직원 ──
 function staffView() {
   const st = S.staff; if (!st) return '<div class="page"><p class="empty">불러오는 중…</p></div>';
-  const card = (s) => `<div class="card staff"><h4>${esc(s.name)}</h4><p>${esc(s.role)}</p>${s.example ? `<p class="q">이렇게 말해 보세요 · “${esc(s.example)}”</p>` : ''}${s.needs ? `<p class="crumb">필요한 것: ${esc(s.needs)}</p>` : ''}${(s.with || []).length ? `<p class="crumb">함께 쓰는 스킬: ${esc(s.with.join(', '))}</p>` : ''}<div class="acts"><button class="btn dark" data-act="hire" data-name="${esc(s.name)}">이 직원에게 맡기기</button></div></div>`;
+  const card = (s) => `<div class="card staff"><h4>${esc(s.name)}</h4><p>${esc(s.role)}</p>${s.example ? `<p class="q">이렇게 말해 보세요 · “${esc(s.example)}”</p>` : ''}${s.needs || (s.with || []).length ? `<details class="more"><summary>자세히</summary>${s.needs ? `<p class="crumb">필요한 것: ${esc(s.needs)}</p>` : ''}${(s.with || []).length ? `<p class="crumb">함께 쓰는 스킬: ${esc(s.with.join(', '))}</p>` : ''}</details>` : ''}<div class="acts"><button class="btn" data-act="hire" data-name="${esc(s.name)}">이 직원에게 맡기기</button></div></div>`;
   const chief = (st.staff || []).find((s) => s.chief);
   const main = (st.staff || []).filter((s) => !s.helper && !s.chief); const helpers = (st.staff || []).filter((s) => s.helper);
   const teams = [...new Set(main.map((s) => s.team || ''))];
+  // 유입·전환 두 묶음(2026-11-25 동규대표 미팅 결정). 묶음 안은 처음 쓰는 대표님에게 권하는 순서대로 번호를 붙인다.
+  const stages = (st.stages || []).filter((g) => main.some((s) => s.stage === g.id));
+  const numCard = (s) => card(s).replace('<div class="card staff"><h4>', `<div class="card staff"><h4><span class="ord num">${s.order}</span>`).replace('</h4>', `<span class="r">${esc(s.team || '')}</span></h4>`);
+  const stageHtml = (g) => { const L = main.filter((s) => s.stage === g.id).sort((a, b) => a.order - b.order); return `<div class="stagehead ${g.id === 'support' ? 'sub' : ''}"><h3>${esc(g.label)} <span class="num">${L.length}명</span></h3><p>${esc(g.desc)}</p></div><div class="staffgrid">${L.map(numCard).join('')}</div>`; };
   return `<div class="page"><h2>AI 직원 ${main.length}명</h2><p class="lead">허브에 들어 있는 AI 직원이에요. 일을 맡기면 AI가 알맞은 직원을 알아서 불러요. 직원 이름을 직접 말해도 돼요. 쓰면서 내 일에 맞게 고쳐 가면 내 직원이 돼요.</p>
   ${chief ? `<div class="card chief"><h4>${esc(chief.name)}<span class="r">총괄</span></h4><p>${esc(chief.role)}</p><p class="q">이렇게 말해 보세요 · “${esc(chief.example)}”</p><div class="acts"><button class="btn pri" data-act="hire" data-name="${esc(chief.name)}">총괄 비서에게 맡기기</button></div></div>` : ''}
-  ${teams.map((tm) => `<div class="teamhead">${esc(tm)}</div><div class="staffgrid">${main.filter((s) => (s.team || '') === tm).map(card).join('')}</div>`).join('') || '<p class="empty">직원 목록을 못 읽었어요.</p>'}
+  ${stages.length ? stages.map(stageHtml).join('') : teams.map((tm) => `<div class="teamhead">${esc(tm)}</div><div class="staffgrid">${main.filter((s) => (s.team || '') === tm).map(card).join('')}</div>`).join('') || '<p class="empty">직원 목록을 못 읽었어요.</p>'}
   ${helpers.length ? `<details class="card" style="margin-top:16px"><summary><b>뒤에서 돕는 직원 ${helpers.length}명</b> <span class="crumb">직접 부를 일은 적고, AI가 만들고 점검할 때 알아서 써요</span></summary><div class="staffgrid" style="margin-top:12px">${helpers.map(card).join('')}</div></details>` : ''}
-  ${(S.oss || []).length ? `<div class="teamhead" style="margin-top:28px">같이 쓰면 좋은 오픈소스</div><p class="md" style="margin-bottom:10px">대표가 실제로 써 온 무료 도구예요. AI에게 말하면 확인을 받고 깔아서 써요. 라이선스 주의가 있는 건 표시해 뒀어요.</p><div class="staffgrid">${S.oss.map((o) => `<div class="card staff"><h4>${esc(o.name)}<span class="r">${esc(o.area || '')}</span></h4><p>${esc(o.what || '')}</p>${o.license ? `<p class="crumb">라이선스: ${esc(o.license)}${o.note ? ' · ' + esc(o.note) : ''}</p>` : ''}<div class="acts">${o.say ? `<button class="btn dark" data-act="osshire" data-name="${esc(o.name)}">이걸로 맡기기</button>` : ''}${o.url ? `<a class="btn" href="#" data-act="openurl" data-url="${esc(o.url)}">사이트</a>` : ''}</div></div>`).join('')}</div>` : ''}</div>`;
+  ${(S.oss || []).length ? `<details class="card" style="margin-top:16px"><summary><b>같이 쓰면 좋은 오픈소스 ${S.oss.length}개</b> <span class="crumb">대표가 실제로 써 온 무료 도구예요. AI에게 말하면 확인을 받고 깔아서 써요</span></summary><div class="staffgrid" style="margin-top:12px">${S.oss.map((o) => `<div class="card staff"><h4>${esc(o.name)}<span class="r">${esc(o.area || '')}</span></h4><p>${esc(o.what || '')}</p>${o.license ? `<p class="crumb">라이선스: ${esc(o.license)}${o.note ? ' · ' + esc(o.note) : ''}</p>` : ''}<div class="acts">${o.say ? `<button class="btn" data-act="osshire" data-name="${esc(o.name)}">이걸로 맡기기</button>` : ''}${o.url ? `<a class="btn" href="#" data-act="openurl" data-url="${esc(o.url)}">사이트</a>` : ''}</div></div>`).join('')}</div></details>` : ''}</div>`;
 }
 
 // ── 설정 ──
@@ -326,8 +333,8 @@ function connPage() {
   const card = (x) => { const ks = x.keys || []; const ok = ks.length && ks.every((k) => k.has);
     return `<div class="card conn" style="max-width:720px;margin-bottom:12px"><h4>${esc(x.name)}<span class="r">${ks.length ? `<span class="st ${ok ? 'work' : 'wait'}">${ok ? '연결됨' : '연결 전'}</span>` : '<span class="st done">키 필요 없음</span>'}</span></h4>
     <p>${esc(x.what)} <span class="crumb">· ${esc(x.staff)}</span></p>
-    <ol class="steps">${(x.steps || []).map((t) => `<li>${esc(t)}</li>`).join('')}</ol>
-    ${ks.map((k) => `<form class="keyrow" data-form="key"><input type="hidden" name="name" value="${esc(k.name)}"><label>${esc(k.label)}</label><div class="field"><input type="password" name="value" autocomplete="off" placeholder="${k.has ? '저장돼 있어요 · 바꾸려면 새로 붙여 넣기' : '여기에 붙여 넣기'}"></div><button class="btn dark">저장</button>${k.has ? `<button type="button" class="btn" data-act="keydel" data-name="${esc(k.name)}">지우기</button>` : ''}</form>`).join('')}
+    ${(x.steps || []).length ? `<details class="more"><summary>키 받는 순서 보기</summary><ol class="steps">${x.steps.map((t) => `<li>${esc(t)}</li>`).join('')}</ol></details>` : ''}
+    ${ks.map((k) => `<form class="keyrow" data-form="key"><input type="hidden" name="name" value="${esc(k.name)}"><label>${esc(k.label)}</label><div class="field"><input type="password" name="value" autocomplete="off" placeholder="${k.has ? '저장돼 있어요 · 바꾸려면 새로 붙여 넣기' : '여기에 붙여 넣기'}"></div><button class="btn">저장</button>${k.has ? `<button type="button" class="btn" data-act="keydel" data-name="${esc(k.name)}">지우기</button>` : ''}</form>`).join('')}
     <div class="acts">${ks.length ? `<button class="btn pri" data-act="connhelp" data-id="${esc(x.id)}">AI에게 연결 도와 달라</button>` : ''}<a class="btn" href="#" data-act="openurl" data-url="${esc(x.doc)}">공식 안내</a></div></div>`; };
   return `<h2>연결</h2><p class="lead">AI 직원이 바깥 서비스에 올리고 보내려면 내 계정의 키가 필요해요. 흐름은 다 들어 있고 키만 비어 있어요. 키는 이 PC 금고에만 저장되고 대화·파일에 남지 않아요.</p>${c.connections.map(card).join('')}`;
 }
@@ -381,7 +388,7 @@ function learnPage() {
   <div class="card" style="max-width:640px"><label class="toggle"><input type="checkbox" data-act="consent" ${on ? 'checked' : ''}>내 대화 기록 점검에 동의해요 (언제든 끌 수 있어요)</label>
   <div class="acts"><button class="btn pri" data-act="learnscan" ${!on || S.learnBusy ? 'disabled' : ''}>${ic('spark', 's')}${S.learnBusy ? '점검 중…' : '지금 점검 (최근 7일)'}</button></div></div>
   <div style="margin-top:16px">${S.pending.map((c) => `<div class="cand"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="st done">${c.kind === 'skill' ? '스킬' : '규칙'}</span><b>${esc(c.title)}</b></div>
-   <p style="margin-top:6px">${esc(c.text)}</p>${(c.evidence || []).map((e) => `<p class="q">내가 한 말 · “${esc(e)}”</p>`).join('')}
+   <p style="margin-top:6px">${esc(c.text)}</p>${(c.evidence || []).length ? `<details class="more"><summary>내가 한 말 ${c.evidence.length}개 보기</summary>${c.evidence.map((e) => `<p class="q">“${esc(e)}”</p>`).join('')}</details>` : ''}
    <div class="acts"><button class="btn dark" data-act="decide" data-id="${c.id}" data-c="personal">${c.kind === 'skill' ? '내 스킬로 넣기' : '내 규칙으로 넣기'}</button><button class="btn" data-act="decide" data-id="${c.id}" data-c="discard">버리기</button></div></div>`).join('') || '<p class="empty">후보가 없어요. 동의한 뒤 지금 점검을 눌러 보세요.</p>'}</div>`;
 }
 

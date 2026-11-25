@@ -1,6 +1,23 @@
 {
  "version": 1,
  "note": "설명회에서 약속한 6개 팀 24명 + 돕는 직원. skill은 skills/ 폴더 이름",
+ "stages": [
+  {
+   "id": "inflow",
+   "label": "유입 · 손님을 모으는 직원",
+   "desc": "모르는 사람이 내 사업을 알고 찾아오게 만듭니다."
+  },
+  {
+   "id": "conversion",
+   "label": "전환 · 손님이 사게 만드는 직원",
+   "desc": "찾아온 사람이 문의하고, 결제하고, 다시 사게 만듭니다."
+  },
+  {
+   "id": "support",
+   "label": "두 쪽을 받쳐 주는 직원",
+   "desc": "할 일, 숫자, 점검을 맡아 유입과 전환이 끊기지 않게 합니다."
+  }
+ ],
  "staff": [
   {
    "name": "총괄 비서",
@@ -19,7 +36,9 @@
    "with": [
     "news-digest",
     "content-repurpose"
-   ]
+   ],
+   "stage": "inflow",
+   "order": 1
   },
   {
    "name": "블로그 마케터",
@@ -30,7 +49,9 @@
    "needs": "Aside 브라우저(없으면 Python, 크롬 또는 엣지)",
    "with": [
     "blog-checker"
-   ]
+   ],
+   "stage": "inflow",
+   "order": 3
   },
   {
    "name": "카페 바이럴 마케터",
@@ -41,14 +62,18 @@
    "with": [
     "cafe-schedule",
     "naver-cafe-writer"
-   ]
+   ],
+   "stage": "inflow",
+   "order": 4
   },
   {
    "name": "출판 편집자",
    "team": "글쓰기",
    "skill": "ebook-editor",
    "role": "내 글을 모아 전자책 목차·원고·PDF로 묶어요",
-   "example": "내 글 모아서 전자책 목차부터 짜줘"
+   "example": "내 글 모아서 전자책 목차부터 짜줘",
+   "stage": "conversion",
+   "order": 3
   },
   {
    "name": "그래픽 디자이너",
@@ -59,7 +84,9 @@
    "needs": "Python(이미지로 뽑을 때)",
    "with": [
     "youtube-thumbnail-ab"
-   ]
+   ],
+   "stage": "inflow",
+   "order": 6
   },
   {
    "name": "SNS 콘텐츠 디자이너",
@@ -67,14 +94,18 @@
    "skill": "cardnews-maker",
    "role": "카드뉴스를 기획표부터 이미지(PNG)까지 만들어요",
    "example": "이 주제로 카드뉴스 5장 만들어줘",
-   "needs": "Python, 크롬 또는 엣지"
+   "needs": "Python, 크롬 또는 엣지",
+   "stage": "inflow",
+   "order": 5
   },
   {
    "name": "PPT 디자이너",
    "team": "디자인",
    "skill": "lecture-deck",
    "role": "발표·강의 덱과 진행 대본을 만들어요",
-   "example": "내 서비스 소개 발표 자료 만들어줘"
+   "example": "내 서비스 소개 발표 자료 만들어줘",
+   "stage": "conversion",
+   "order": 6
   },
   {
    "name": "상세페이지 디자이너",
@@ -82,7 +113,9 @@
    "skill": "detail-page",
    "role": "상품 상세페이지를 만들어요",
    "example": "내 상품 상세페이지 만들어줘",
-   "needs": "Python(이미지로 뽑을 때)"
+   "needs": "Python(이미지로 뽑을 때)",
+   "stage": "conversion",
+   "order": 2
   },
   {
    "name": "콘텐츠 기획자",
@@ -92,7 +125,9 @@
    "example": "이번 달 올릴 콘텐츠 주제 5개 짜줘",
    "with": [
     "reference-picker"
-   ]
+   ],
+   "stage": "inflow",
+   "order": 7
   },
   {
    "name": "영상편집자",
@@ -105,7 +140,9 @@
     "cut-list",
     "reel-reference-edit",
     "vlog-reference-edit"
-   ]
+   ],
+   "stage": "inflow",
+   "order": 9
   },
   {
    "name": "숏폼 영상편집자",
@@ -122,7 +159,9 @@
     "reels-claim-numbers",
     "reels-tool-demo",
     "ai-school-video-edit"
-   ]
+   ],
+   "stage": "inflow",
+   "order": 10
   },
   {
    "name": "유튜브 채널 관리자",
@@ -134,7 +173,9 @@
     "youtube-reply",
     "youtube-thumbnail-ab",
     "longform-shorts"
-   ]
+   ],
+   "stage": "inflow",
+   "order": 11
   },
   {
    "name": "SNS 마케터",
@@ -145,7 +186,9 @@
    "needs": "Threads 연결",
    "with": [
     "threads-schedule"
-   ]
+   ],
+   "stage": "inflow",
+   "order": 2
   },
   {
    "name": "릴스 PD",
@@ -155,7 +198,9 @@
    "example": "릴스 대본 30초짜리로 써줘",
    "with": [
     "reels-planner"
-   ]
+   ],
+   "stage": "inflow",
+   "order": 8
   },
   {
    "name": "네이버 카페 관리자",
@@ -165,7 +210,9 @@
    "example": "카페에 올릴 공지 글 써줘",
    "with": [
     "cafe-welcome"
-   ]
+   ],
+   "stage": "conversion",
+   "order": 5
   },
   {
    "name": "오픈채팅방 관리자",
@@ -175,7 +222,9 @@
    "example": "톡방에 올릴 이번 주 소식 써줘",
    "with": [
     "kakao-notice"
-   ]
+   ],
+   "stage": "conversion",
+   "order": 4
   },
   {
    "name": "쇼핑몰 CS 담당자",
@@ -185,7 +234,9 @@
    "example": "이 환불 문의 답변 써줘",
    "with": [
     "order-notice"
-   ]
+   ],
+   "stage": "conversion",
+   "order": 7
   },
   {
    "name": "쇼핑몰 운영 관리자",
@@ -195,7 +246,9 @@
    "example": "팔 만한 상품 찾고 상세 개선해줘",
    "with": [
     "sales-report"
-   ]
+   ],
+   "stage": "conversion",
+   "order": 1
   },
   {
    "name": "퍼포먼스 마케터",
@@ -206,7 +259,9 @@
    "with": [
     "utm-links",
     "utm-link"
-   ]
+   ],
+   "stage": "inflow",
+   "order": 12
   },
   {
    "name": "출고·배송 관리 담당자",
@@ -216,21 +271,27 @@
    "example": "주문 파일에서 오늘 보낼 것만 뽑아줘",
    "with": [
     "ship-file"
-   ]
+   ],
+   "stage": "conversion",
+   "order": 8
   },
   {
    "name": "비서",
    "team": "업무관리",
    "skill": "daily-assistant",
    "role": "메모·일정으로 오늘 할 일 한 장을 만들어요",
-   "example": "오늘 할 일이랑 일정 정리해줘"
+   "example": "오늘 할 일이랑 일정 정리해줘",
+   "stage": "support",
+   "order": 1
   },
   {
    "name": "운영 매니저",
    "team": "업무관리",
    "skill": "ops-manager",
    "role": "할 일 우선순위·주간 정리·숫자 보고를 해요",
-   "example": "이번 달 매출 세 줄로 정리해줘"
+   "example": "이번 달 매출 세 줄로 정리해줘",
+   "stage": "support",
+   "order": 2
   },
   {
    "name": "시스템 모니터링 요원",
@@ -240,7 +301,9 @@
    "example": "내 자동화 잘 돌고 있는지 봐줘",
    "with": [
     "job-watch"
-   ]
+   ],
+   "stage": "support",
+   "order": 4
   },
   {
    "name": "IT 운영 담당자",
@@ -250,7 +313,9 @@
    "example": "내가 만든 페이지 잘 되는지 점검해줘",
    "with": [
     "fix-playbook"
-   ]
+   ],
+   "stage": "support",
+   "order": 3
   },
   {
    "name": "글 다듬기 점검",
