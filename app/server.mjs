@@ -88,6 +88,8 @@ function emit(ev) { const s = `data: ${JSON.stringify(ev)}\n\n`; for (const c of
 
 // ── AI 실행 ─────────────────────────────────────────────────
 const running = new Map();
+// 허브가 꺼졌다 켜지면 돌던 AI는 이미 없다. '하는 중'으로 남은 작업을 멈춘 것으로 바꿔 둔다.
+for (const t of allTasks()) if (t.status === 'working') { t.status = 'done'; t.messages.push({ ts: new Date().toISOString(), role: 'warn', text: '허브가 다시 켜지면서 이 일은 멈췄어요. 이어서 하려면 다시 말을 보내 주세요.' }); writeTask(t); }
 // 스킬을 불렀으면 한 줄로 보여 준다(같은 스킬은 한 번만)
 function skillUsed(t, name) {
   if ((t.skillsUsed || []).includes(name)) return;
@@ -104,10 +106,11 @@ function skillLabel(name) {
 }
 function pushMsg(t, m) { t.messages.push({ ts: new Date().toISOString(), ...m }); t.updated = new Date().toISOString(); writeTask(t); emit({ type: 'msg', task: t.id, msg: t.messages.at(-1) }); }
 
-function runCodexTurn(t, text) {
+function runCodexTurn(t, text, imgs = []) {
   let bin, pre; try { [bin, pre] = codexCommand(); } catch { setTimeout(() => finish(t.id, 1, 'ENOENT'), 0); return { kill() {} }; }
-  const a = ['exec', ...modelArgs(), '--skip-git-repo-check', '--json'];
+  const a = ['exec', ...(t.model ? ['-m', t.model] : modelArgs()), '--skip-git-repo-check', '--json'];
   if (t.thread_id) a.push('resume', t.thread_id, '-'); else a.push('-');
+  for (const im of imgs) a.push(`--image=${im.file}`); // 프롬프트(-) 뒤에 붙여야 '-'를 그림 이름으로 먹지 않는다
   const where = t.picked ? `작업 폴더는 실제 프로젝트 폴더(${t.cwd})다. 그 폴더의 규칙 파일(AGENTS.md 등)이 있으면 따른다.` : '결과물은 지금 작업 폴더에 파일로 만든다.';
   const prefix = t.thread_id ? '' : `[AI 학교 허브] 요청한 사람: ${conf.me || '수강생'}\n${where}\n\n`;
   // 가져온 개인 Codex 대화는 원래 자리(~/.codex)에서 그대로 이어 쓴다(복사 없음)
@@ -140,16 +143,22 @@ function runCodexTurn(t, text) {
 const CLAUDE_ALLOWED = ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'WebFetch', 'WebSearch', 'Skill', 'Task', 'TodoWrite',
   ...['python3', 'python', 'py', 'node', 'npx', 'npm', 'ffmpeg', 'ffprobe', 'yt-dlp', 'whisper', 'ls', 'cat', 'head', 'tail', 'grep', 'find', 'wc', 'sort', 'cd', 'pwd', 'echo', 'mkdir', 'cp', 'mv', 'touch', 'sed', 'awk', 'file', 'sips', 'open', 'curl', 'unzip', 'zip', 'test', 'which', 'where', 'date',
     'Get-ChildItem', 'Get-Content', 'Set-Location', 'New-Item', 'Copy-Item', 'Move-Item', 'Test-Path', 'Start-Process', 'powershell', 'pwsh'].map((c) => `Bash(${c}:*)`), 'PowerShell'];
-function runClaudeTurn(t, text) {
+function runClaudeTurn(t, text, imgs = []) {
   // 학생 PC에서 Claude가 직원 스킬을 읽고 파이썬·노드 도구를 돌릴 수 있게: 허브 작업 폴더·내 자료를 열고, 일에 필요한 명령만 미리 허용(지우기·관리자 권한 같은 위험한 명령은 계속 확인 필요)
   const a = ['-p', '--output-format', 'stream-json', '--verbose', '--permission-mode', 'acceptEdits', '--add-dir', workRoot(), '--add-dir', myDir(),
     '--allowedTools', CLAUDE_ALLOWED.join(','), '--disallowedTools', 'Bash(rm -rf:*),Bash(sudo:*),Bash(git push:*)'];
+  if (t.model) a.push('--model', t.model);
   if (t.thread_id) a.push('--resume', t.thread_id);
+  // 사진이 있으면 글과 사진을 한 메시지(stream-json)로 넘긴다. Claude가 따로 파일을 열 필요가 없다.
+  if (imgs.length) a.push('--input-format', 'stream-json');
   const c = cliSpawnArgs(claudeCommand(), a);
   const p = spawn(c.cmd, c.args, { cwd: t.cwd, shell: c.shell });
   p.on('error', (e) => { p.spawnErr = String(e && e.code === 'ENOENT' ? 'ENOENT' : e); });
   p.stdin.on('error', () => {});
-  p.stdin.end(text, 'utf8');
+  if (imgs.length) {
+    const content = [{ type: 'text', text }, ...imgs.map((im) => ({ type: 'image', source: { type: 'base64', media_type: im.mime, data: fs.readFileSync(im.file).toString('base64') } }))];
+    p.stdin.end(JSON.stringify({ type: 'user', message: { role: 'user', content } }) + '\n', 'utf8');
+  } else p.stdin.end(text, 'utf8');
   let buf = '', err = '', lastTok = 0;
   p.stdout.setEncoding('utf8');
   p.stdout.on('data', (d) => {
@@ -203,8 +212,9 @@ function runAsideTurn(t, text) {
   });
 }
 // 실패 이유를 학생 말로: 프로그램 없음 / 로그인 필요 / 사용량 다 씀 / 그 밖
-function friendlyError(rt, err) {
+function friendlyError(rt, err, picked = false) {
   const e = String(err || ''); const who = rt === 'claude' ? 'Claude' : 'Codex';
+  if (picked && /issue with the selected model|may not exist or you may not have access|model.{0,80}(not (found|supported|available)|does not exist|unavailable|not have access|no access)|invalid model|unknown model/i.test(e)) return { kind: 'model', text: `고른 모델을 지금 ${who} 구독에서 쓸 수 없어요. 새로 맡기기에서 모델을 '기본'으로 골라 새 대화로 다시 맡겨 주세요.` };
   if (/ENOENT|not recognized|command not found|찾지 못했|없어요/i.test(e)) return { kind: 'missing', text: `이 PC에 ${who} 프로그램이 없어요. 설정 › AI 로그인에서 확인하거나, 위에서 다른 AI를 골라 주세요.` };
   if (/log ?in|logged out|not logged|unauthori[sz]ed|401|auth|credential|token.*expir/i.test(e)) return { kind: 'login', text: `${who} 로그인이 필요해요. 설정 › AI 로그인에서 로그인한 뒤 다시 보내 주세요.` };
   if (/rate.?limit|usage limit|quota|429|limit reached|too many requests|exceeded/i.test(e)) return { kind: 'quota', text: `${who} 사용량을 다 썼어요. 아래 줄에서 다시 채워지는 날을 보고, 그 전엔 다른 AI로 맡겨 보세요.` };
@@ -215,7 +225,7 @@ function finish(id, code, err) {
   const t = readTask(id);
   t.status = code === 0 ? 'done' : 'error';
   if (r && r.stopped) { t.status = 'done'; pushMsg(t, { role: 'warn', text: '멈췄어요. 이어서 하려면 다시 말을 보내 주세요.' }); }
-  else if (code !== 0) { const f = friendlyError(t.runtime, err); if (t.runtime === 'codex' && !t.codexPersonal && STALE_RE.test(String(err || ''))) { markCodexStale(); f.kind = 'login'; f.text = 'Codex 로그인이 끊겼어요. 설정 › AI 로그인에서 다시 로그인한 뒤 보내 주세요.'; refreshAuth(true); } pushMsg(t, { role: 'warn', kind: f.kind, text: f.text, detail: String(err).trim().split('\n').slice(-3).join(' ').slice(0, 300) }); }
+  else if (code !== 0) { const f = friendlyError(t.runtime, err, !!t.model); if (t.runtime === 'codex' && !t.codexPersonal && STALE_RE.test(String(err || ''))) { markCodexStale(); f.kind = 'login'; f.text = 'Codex 로그인이 끊겼어요. 설정 › AI 로그인에서 다시 로그인한 뒤 보내 주세요.'; refreshAuth(true); } pushMsg(t, { role: 'warn', kind: f.kind, text: f.text, detail: String(err).trim().split('\n').slice(-3).join(' ').slice(0, 300) }); }
   else { writeTask(t); if (t.runtime === 'codex' && !t.codexPersonal && codexStale()) { clearCodexStale(); refreshAuth(true); } }
   emit({ type: 'status', task: id, status: t.status });
   usageCache.codex.at = 0; // 다음 조회 때 남은 양 새로 읽기
@@ -223,15 +233,72 @@ function finish(id, code, err) {
   if (restartPending && !running.size) setTimeout(() => maybeRestart('기다리던 작업 끝남'), 1000);
 }
 
-function send(t, text, { show = null, internal = false } = {}) {
+// ── 고를 수 있는 모델 ──
+// 기본은 맨 위. Codex는 구독이 내려 준 목록(models_cache.json) 순서 그대로, Claude는 별칭.
+// 모델은 대화를 시작할 때만 고른다(대화 중간에 바꾸면 앞 맥락을 다른 모델이 이어받아 흐려진다).
+// 보여 줄 모델(민수 지정 2026-11-25). 이름은 각 앱이 보여 주는 그대로, 맨 위가 기본이다.
+const CODEX_SHOW = ['gpt-6.2-sol', 'gpt-6.2-astra', 'gpt-6.1-terra', 'gpt-6-luna'];
+const CODEX_NAME = { 'gpt-6.2-sol': 'GPT-6.2-Sol', 'gpt-6.2-astra': 'GPT-6.2-Astra', 'gpt-6.1-terra': 'GPT-6.1 Terra', 'gpt-6-luna': 'GPT-6-Luna' };
+function modelList() {
+  // Codex: 그 PC의 구독 목록(models_cache.json)에 있는 것만, 앱이 쓰는 표시 이름으로. 목록이 없으면 정해 둔 이름으로.
+  let have = null;
+  for (const home of [codexHome(), sess.personalCodexHome()]) {
+    try { const d = JSON.parse(fs.readFileSync(path.join(home, 'models_cache.json'), 'utf8')); have = new Map((d.models || []).map((m) => [m.slug, m.display_name || m.slug])); break; } catch {}
+  }
+  const codex = CODEX_SHOW.filter((id) => !have || have.has(id)).map((id) => ({ id, label: (have && have.get(id)) || CODEX_NAME[id] }));
+  if (codex.length && codex[0].id === CODEX_SHOW[0]) codex[0].id = ''; // 맨 위(GPT-6.2-Sol) = 구독 기본값: -m 없이 돈다
+  const claude = [{ id: 'fable', label: 'Fable 5.2' }, { id: 'opus', label: 'Opus 5.5' }, { id: 'sonnet', label: 'Sonnet 5.5' }, { id: 'haiku', label: 'Haiku 5.5' }];
+  return { codex: codex.length ? codex : [{ id: '', label: 'GPT-6.2-Sol' }], claude };
+}
+
+// ── 붙여 넣은 사진 ──
+// 화면이 data URL로 보낸 사진을 허브 폴더(uploads/태스크ID)에 저장한다. 작업 폴더(실제 저장소일 수 있음)는 더럽히지 않는다.
+const UPLOADS = path.join(hubHome(), 'uploads');
+const IMG_EXT = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/gif': '.gif', 'image/webp': '.webp' };
+const IMG_MAX = 6, IMG_BYTES = 10 << 20;
+function sniffImage(b) {
+  if (b.length > 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'image/png';
+  if (b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg';
+  if (b.length > 6 && b.toString('ascii', 0, 4) === 'GIF8') return 'image/gif';
+  if (b.length > 12 && b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP') return 'image/webp';
+  return null;
+}
+// 먼저 전부 검사한다(잘못된 사진이면 작업·파일을 하나도 만들지 않는다)
+function checkImages(list) {
+  if (!Array.isArray(list) || !list.length) return [];
+  if (list.length > IMG_MAX) throw new Error(`사진은 한 번에 ${IMG_MAX}장까지 보낼 수 있어요`);
+  return list.map((im) => {
+    const m = String(typeof im === 'string' ? im : im?.data || '').match(/^data:(image\/(?:png|jpeg|gif|webp));base64,([A-Za-z0-9+/=]+)$/);
+    if (!m) throw new Error('PNG·JPG·GIF·WEBP 사진만 보낼 수 있어요');
+    const buf = Buffer.from(m[2], 'base64');
+    if (buf.length > IMG_BYTES) throw new Error('사진 한 장이 너무 커요(10MB까지)');
+    const mime = sniffImage(buf); // 이름은 .png인데 속은 JPG인 경우가 있어 앞 바이트로 다시 정한다
+    if (!mime) throw new Error('PNG·JPG·GIF·WEBP 사진만 보낼 수 있어요');
+    return { mime, buf };
+  });
+}
+function saveImages(t, list) {
+  const ok = checkImages(list); if (!ok.length) return [];
+  const dir = path.join(UPLOADS, t.id); fs.mkdirSync(dir, { recursive: true });
+  return ok.map(({ mime, buf }, i) => {
+    const name = `${Date.now()}-${i + 1}${IMG_EXT[mime]}`;
+    fs.writeFileSync(path.join(dir, name), buf);
+    return { name, mime, file: path.join(dir, name) };
+  });
+}
+
+function send(t, text, { show = null, internal = false, images = [] } = {}) {
   if (running.has(t.id)) throw new Error('이 태스크는 AI가 아직 답하는 중이에요');
-  const intent = t.thread_id && !internal ? handoffIntent(text) : null;
+  if (images.length && t.runtime === 'aside') throw new Error('Aside 대화에는 사진을 보낼 수 없어요. Codex나 Claude 작업에서 보내 주세요');
+  const intent = t.thread_id && !internal && !images.length ? handoffIntent(text) : null;
   if (intent) return { intent: 'handoff', ...intent };
+  const imgs = saveImages(t, images);
+  if (imgs.length && !String(text).trim()) text = imgs.length > 1 ? '붙여 넣은 사진들을 보고 무엇인지 설명해 줘.' : '붙여 넣은 사진을 보고 무엇인지 설명해 줘.';
   const r = maskSecrets(text);
-  pushMsg(t, { role: 'me', text: show || r.text, who: conf.me, ...(show ? { sys: true } : {}) });
+  pushMsg(t, { role: 'me', text: show || r.text, who: conf.me, ...(show ? { sys: true } : {}), ...(imgs.length ? { images: imgs.map((x) => x.name) } : {}) });
   if (r.count) pushMsg(t, { role: 'warn', text: `키 같은 글자 ${r.count}곳을 가렸어요. 대화·저장소에 남기지 않았어요. 각자 금고(맥 키체인·윈도우 자격 증명 관리자)에 저장해 주세요.` });
   t.status = 'working'; writeTask(t); emit({ type: 'status', task: t.id, status: 'working' });
-  running.set(t.id, t.runtime === 'claude' ? runClaudeTurn(t, r.text) : t.runtime === 'aside' ? runAsideTurn(t, r.text) : runCodexTurn(t, r.text));
+  running.set(t.id, t.runtime === 'claude' ? runClaudeTurn(t, r.text, imgs) : t.runtime === 'aside' ? runAsideTurn(t, r.text) : runCodexTurn(t, r.text, imgs));
   return { ok: true };
 }
 import { redact as maskSecrets } from '../tools/lib.mjs';
@@ -292,7 +359,7 @@ function startContinue(t, { followUp = '' } = {}) {
     const gen = (old.gen || 1) + 1;
     const base = old.title.replace(/\s*·\s*이어서 \d+$/, '').trim();
     // 같은 폴더·같은 AI·같은 대화 기록 자리(개인 Codex면 개인 자리)로 새 태스크
-    const nt = newTask({ title: `${base} · 이어서 ${gen}`, team: old.team, runtime: old.runtime, cwd: old.cwd, extra: { picked: !!old.picked, gen, continuedFrom: old.id, codexPersonal: old.codexPersonal || false } });
+    const nt = newTask({ title: `${base} · 이어서 ${gen}`, team: old.team, runtime: old.runtime, cwd: old.cwd, extra: { picked: !!old.picked, gen, continuedFrom: old.id, codexPersonal: old.codexPersonal || false, ...(old.model ? { model: old.model, modelLabel: old.modelLabel } : {}) } });
     fs.mkdirSync(CONT_DIR, { recursive: true });
     const cardFile = path.join(CONT_DIR, `${nt.id}.md`);
     fs.writeFileSync(cardFile, maskSecrets(`# 이어가기 카드 · ${old.title}\n\n원래 대화 ID: ${old.thread_id}\n원문: ${src || '못 찾음'}\n\n${card}\n`).text);
@@ -644,7 +711,9 @@ function search(q) {
 // ── HTTP ────────────────────────────────────────────────────
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.md': 'text/plain; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.svg': 'image/svg+xml', '.webp': 'image/webp', '.pdf': 'application/pdf', '.mp4': 'video/mp4' };
 const json = (res, code, o) => { res.writeHead(code, { 'content-type': MIME['.json'] }); res.end(JSON.stringify(o)); };
-const body = (req) => new Promise((r) => { let s = ''; req.setEncoding('utf8'); req.on('data', (d) => (s += d)); req.on('end', () => { try { r(s ? JSON.parse(s) : {}); } catch { r({}); } }); });
+// 사진 6장(장당 10MB, base64로 약 1.37배)까지 넉넉히 받고, 그보다 크면 끊는다
+const BODY_MAX = 100 << 20;
+const body = (req) => new Promise((r, no) => { let s = '', n = 0, over = false; req.setEncoding('utf8'); req.on('data', (d) => { if (over) return; n += Buffer.byteLength(d); if (n > BODY_MAX) { over = true; s = ''; no(new Error('보낸 내용이 너무 커요. 사진 수를 줄여 주세요')); return req.resume(); } s += d; }); req.on('end', () => { if (over) return; try { r(s ? JSON.parse(s) : {}); } catch { r({}); } }); });
 function serveFile(res, file) {
   if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); return res.end('없음'); }
   res.writeHead(200, { 'content-type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream', 'cache-control': 'no-cache' });
@@ -680,14 +749,16 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/me' && req.method === 'POST') { const b = await body(req); conf.me = String(b.me || '').slice(0, 20); if (b.team) conf.team = b.team; saveConf(); return json(res, 200, { ok: true }); }
     if (p === '/api/usage') { const c = await codexUsage(); if (url.searchParams.get('claude') === '1') await claudeProbe(true); else claudeProbe(false); return json(res, 200, { codex: c, claude: usageCache.claude }); }
     if (p === '/api/search') return json(res, 200, search(url.searchParams.get('q')));
-    if (p === '/api/tasks' && req.method === 'POST') { const b = await body(req); const t = newTask({ title: b.title || '새 태스크', team: b.team, runtime: ['claude', 'aside'].includes(b.runtime) ? b.runtime : 'codex', cwd: b.cwd || '' }); if (b.text) send(t, b.text); return json(res, 200, t); }
+    if (p === '/api/tasks' && req.method === 'POST') { const b = await body(req); const rt = ['claude', 'aside'].includes(b.runtime) ? b.runtime : 'codex'; if (b.images?.length) { if (rt === 'aside') return json(res, 400, { ok: false, msg: 'Aside 대화에는 사진을 보낼 수 없어요' }); try { checkImages(b.images); } catch (e) { return json(res, 400, { ok: false, msg: e.message }); } } const mdl = String(b.model ?? (modelList()[rt]?.[0]?.id || '')); if (mdl && !(modelList()[rt] || []).some((x) => x.id === mdl)) return json(res, 400, { ok: false, msg: '고를 수 없는 모델이에요' }); const t = newTask({ title: b.title || '새 태스크', team: b.team, runtime: rt, cwd: b.cwd || '', extra: mdl ? { model: mdl, modelLabel: (modelList()[rt] || []).find((x) => x.id === mdl)?.label || mdl } : {} }); if (b.text || b.images?.length) { try { send(t, String(b.text || ''), { images: b.images || [] }); } catch (e) { running.delete(t.id); fs.rmSync(tfile(t.id), { force: true }); fs.rmSync(path.join(UPLOADS, t.id), { recursive: true, force: true }); throw e; } } return json(res, 200, t); }
+    if (p === '/api/models') return json(res, 200, modelList());
     if (p === '/api/dirs') return json(res, 200, sess.dirCandidates(url.searchParams.get('q') || '', { recent: conf.recentDirs || [], exclude: hubHome() }));
     if ((m = p.match(/^\/api\/tasks\/([\w-]+)$/))) return json(res, 200, readTask(m[1]));
-    if ((m = p.match(/^\/api\/tasks\/([\w-]+)\/send$/)) && req.method === 'POST') { const b = await body(req); const t = readTask(m[1]); return json(res, 200, send(t, String(b.text || ''))); }
+    if ((m = p.match(/^\/api\/tasks\/([\w-]+)\/send$/)) && req.method === 'POST') { const b = await body(req); const t = readTask(m[1]); return json(res, 200, send(t, String(b.text || ''), { images: b.images || [] })); }
+    if ((m = p.match(/^\/api\/tasks\/([\w-]+)\/img\/([\w.-]+)$/))) return serveFile(res, path.join(UPLOADS, m[1], m[2]));
     if ((m = p.match(/^\/api\/tasks\/([\w-]+)\/files$/))) return json(res, 200, taskFiles(readTask(m[1])));
     if ((m = p.match(/^\/api\/tasks\/([\w-]+)\/stop$/)) && req.method === 'POST') { const r = running.get(m[1]); if (!r) return json(res, 200, { ok: true, idle: true }); r.stopped = true; killTree(r); return json(res, 200, { ok: true }); }
     if ((m = p.match(/^\/api\/tasks\/([\w-]+)\/rename$/)) && req.method === 'POST') { const b = await body(req); const t = readTask(m[1]); t.title = String(b.title || '').trim().slice(0, 60) || t.title; writeTask(t); return json(res, 200, { ok: true }); }
-    if ((m = p.match(/^\/api\/tasks\/([\w-]+)\/delete$/)) && req.method === 'POST') { if (running.has(m[1])) return json(res, 409, { ok: false, msg: 'AI가 일하는 중이에요. 멈춘 뒤 지워 주세요' }); fs.rmSync(tfile(m[1]), { force: true }); return json(res, 200, { ok: true }); }
+    if ((m = p.match(/^\/api\/tasks\/([\w-]+)\/delete$/)) && req.method === 'POST') { if (running.has(m[1])) return json(res, 409, { ok: false, msg: 'AI가 일하는 중이에요. 멈춘 뒤 지워 주세요' }); fs.rmSync(tfile(m[1]), { force: true }); fs.rmSync(path.join(UPLOADS, m[1]), { recursive: true, force: true }); return json(res, 200, { ok: true }); }
     if ((m = p.match(/^\/api\/tasks\/([\w-]+)\/reveal$/)) && req.method === 'POST') { const b = await body(req); const t = readTask(m[1]); return json(res, 200, reveal(t.cwd, b.what === 'terminal' ? 'terminal' : 'folder')); }
     if (p === '/api/reveal' && req.method === 'POST') { const b = await body(req); return json(res, 200, reveal(workRoot(), b.what === 'terminal' ? 'terminal' : 'folder')); }
     // 업데이트: 확인(앱 열 때) · 적용(버튼). 적용이 끝나면 새 코드로 서버를 다시 켠다

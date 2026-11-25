@@ -6,7 +6,7 @@ const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ic = (id, cls = '') => `<svg class="i ${cls}"><use href="#${id}"/></svg>`;
 const api = async (url, opt = {}) => { const r = await fetch(url, { headers: { 'content-type': 'application/json' }, ...opt, body: opt.body ? JSON.stringify(opt.body) : undefined }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.msg || `오류 ${r.status}`); return j; };
-const S = { st: null, view: 'today', taskId: null, task: null, files: [], sideTab: 'preview', previewSrc: '', mdText: null, usage: null, q: '', res: [], setTab: 'ai', scan: null, scanBusy: false, pane: 'list', learnBusy: false, pending: [], rules: null, auth: null, dir: {}, staff: null, skills: null, prefill: null, my: null, conns: null, oss: null, login: {}, split: false, splitIds: [], splitTasks: {} };
+const S = { st: null, view: 'today', taskId: null, task: null, files: [], sideTab: 'preview', previewSrc: '', mdText: null, usage: null, q: '', res: [], setTab: 'ai', scan: null, scanBusy: false, pane: 'list', learnBusy: false, pending: [], rules: null, auth: null, dir: {}, staff: null, skills: null, prefill: null, my: null, conns: null, oss: null, login: {}, split: false, splitIds: [], splitTasks: {}, att: {} };
 try { const v = JSON.parse(localStorage.getItem('split') || 'null'); if (v) { S.split = !!v.on; S.splitIds = (v.ids || []).slice(0, 4); } } catch {}
 function saveSplit() { try { localStorage.setItem('split', JSON.stringify({ on: S.split, ids: S.splitIds })); } catch {} }
 function toast(t) { const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 3600); }
@@ -14,7 +14,51 @@ const ago = (iso) => { if (!iso) return ''; const m = Math.round((Date.now() - n
 const stLabel = (s) => ({ working: ['work', '하는 중'], done: ['done', '끝남'], error: ['late', '오류'], idle: ['done', '새 작업'] }[s] || ['done', s]);
 const base = (p) => String(p || '').split(/[\\/]/).filter(Boolean).pop() || p;
 const rtName = (r) => (r === 'claude' ? 'Claude' : 'Codex');
+const modelOpts = (rt, sel = '') => ((S.models && S.models[rt]) || [{ id: '', label: 'Default' }]).map((m) => `<option value="${esc(m.id)}" ${m.id === sel ? 'selected' : ''}>${esc(m.label)}</option>`).join('');
+const MODEL_HELP = '모델은 대화를 시작할 때 정해요. 바꾸려면 새로 맡기기에서 골라 새 대화로 맡겨 주세요';
+const rtChip = (t) => `<button type="button" class="chip mchip" data-act="ctxhelp" data-msg="${esc(MODEL_HELP)}" title="${esc(MODEL_HELP)}">${rtName(t.runtime)}${t.modelLabel ? ' · ' + esc(t.modelLabel) : ''}</button>`;
+// 대화가 얼마나 찼나: 50%부터 새 대화를 권한다
+const ctxChip = (t) => { const p = ctxPct(t); if (p == null) return ''; const msg = `이 대화가 기억할 수 있는 양 중 ${p}%를 썼어요. 50%가 넘으면 새 대화로 이어가는 게 좋아요`; return `<button type="button" class="ctxchip ${p >= 80 ? 'hot' : p >= 50 ? 'warn' : ''}" data-act="ctxhelp" data-msg="${esc(msg)}" title="${esc(msg)}"><span class="bar" role="progressbar" aria-label="대화가 찬 정도" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${p}"><i style="width:${Math.max(3, p)}%"></i></span>대화 ${p}% 참</button>`; };
 const ctxPct = (t) => (t.ctx && typeof t.ctx.pct === 'number' ? t.ctx.pct : null);
+// ── 붙여 넣은 사진(대화창마다 따로): 'send' / 'new-today' / 'p-태스크ID'
+const attKey = (f) => (f.dataset.form === 'send' ? `send-${S.taskId}` : f.dataset.form === 'newtask' ? `new-${f.dataset.where}` : `p-${f.dataset.id}`);
+const ATT_MAX = 6;
+function attStrip(k) {
+  const L = S.att[k] || []; if (!L.length) return '';
+  return `<div class="atts">${L.map((x, i) => `<div class="att"><img src="${x.data}" alt="붙인 사진 ${i + 1}"><button type="button" data-act="attdel" data-k="${esc(k)}" data-i="${i}" aria-label="사진 빼기">×</button></div>`).join('')}</div>`;
+}
+const attBtn = (k) => `<button type="button" class="btn attbtn" data-act="attpick" aria-label="사진 붙이기" title="사진 붙이기 · 캡처를 Ctrl+V(맥은 Cmd+V)로 붙여 넣어도 돼요">${ic('image', 's')}사진</button><input type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/heic,image/heif" multiple data-attin="${esc(k)}" hidden tabindex="-1">`;
+const readUrl = (blob) => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => no(r.error); r.readAsDataURL(blob); });
+// 큰 캡처는 줄인다(AI가 받는 한 장 크기 제한 5MB). 글씨가 읽히게 긴 쪽 2000px까지만 줄이고, 그래도 크면 JPG로.
+async function prepImage(file) {
+  const OK = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'], LIMIT = 3.5 * 1024 * 1024;
+  const url = await readUrl(file);
+  const img = await new Promise((ok, no) => { const im = new Image(); im.onload = () => ok(im); im.onerror = () => no(new Error('이 사진은 열 수 없어요')); im.src = url; });
+  const big = Math.max(img.naturalWidth, img.naturalHeight);
+  if (!big) throw new Error('이 사진은 열 수 없어요');
+  if (OK.includes(file.type) && file.size <= LIMIT && big <= 2400) return url;
+  const k = Math.min(1, 2000 / big); const c = document.createElement('canvas');
+  c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  let out = c.toDataURL('image/png');
+  if (out.length * 0.75 > LIMIT) { const x = c.getContext('2d'); x.globalCompositeOperation = 'destination-over'; x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); out = c.toDataURL('image/jpeg', 0.9); } // 투명 배경이 검게 나오지 않게
+  return out;
+}
+const isImg = (f) => f && (/^image\//.test(f.type) || (!f.type && /\.(png|jpe?g|gif|webp|heic|heif)$/i.test(f.name || '')));
+async function addImages(k, files) {
+  const all = [...files]; const imgs = all.filter(isImg);
+  if (all.length > imgs.length) toast('사진(PNG·JPG·GIF·WEBP)만 붙일 수 있어요');
+  if (!imgs.length) return false;
+  const L = (S.att[k] ||= []);
+  S.attBusy = (S.attBusy || 0) + 1;
+  try {
+    for (const f of imgs) {
+      if (L.length >= ATT_MAX) { toast(`사진은 한 번에 ${ATT_MAX}장까지예요`); break; }
+      try { const d = await prepImage(f); if (/^data:image\/(png|jpeg|gif|webp);base64,/.test(d)) L.push({ data: d }); else toast('이 사진은 열 수 없어요'); } catch (e) { toast(e.message || '사진을 붙이지 못했어요'); }
+    }
+  } finally { S.attBusy--; }
+  render(); return true;
+}
 const fileUrl = (name) => `/files/${S.taskId}/${String(name).split('/').map(encodeURIComponent).join('/')}`;
 
 // ── 마크다운 그리기: AI 답·.md 결과물의 기호(**, #, -, 표)를 보기 좋게. 먼저 전부 이스케이프한 뒤 바꾼다(안전).
@@ -60,7 +104,7 @@ async function loadUsage() { try { S.usage = await api('/api/usage'); renderSB()
 async function openTask(id, quiet) {
   S.taskId = id; S.task = await api(`/api/tasks/${id}`);
   S.files = await api(`/api/tasks/${id}/files`).catch(() => []);
-  if (!S.previewSrc || !S.previewSrc.startsWith(`/files/${id}/`)) { const h = S.files.find((f) => /\.html?$/i.test(f.name)) || S.files.find((f) => /\.(png|jpe?g|webp|gif|svg|pdf|md|txt)$/i.test(f.name)); setPreview(h ? fileUrl(h.name) : ''); }
+  if (!S.previewSrc || !(S.previewSrc.startsWith(`/files/${id}/`) || S.previewSrc.startsWith(`/api/tasks/${id}/img/`))) { const h = S.files.find((f) => /\.html?$/i.test(f.name)) || S.files.find((f) => /\.(png|jpe?g|webp|gif|svg|pdf|md|txt)$/i.test(f.name)); setPreview(h ? fileUrl(h.name) : ''); }
   if (!quiet) { S.view = 'work'; S.pane = 'chat'; render(); }
 }
 // .md·.txt 결과물은 글자를 받아 그려서 보여 준다
@@ -79,13 +123,23 @@ function topbar() {
   <button class="me" data-act="settings" data-tab="me">${esc(S.st.me || '이름')}</button></div></div>`;
 }
 
-// ── 업데이트 띠: 새 버전이 있을 때만 위 줄 아래에 뜬다 ──
-function updBar() {
+// ── 업데이트 알림: 앱 오른쪽 아래(상태 줄 위)에 카드로 뜬다 ──
+const X_SVG = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>';
+function updCardHtml() {
   const u = S.upd; if (!u) return '';
-  if (u.updating) return `<div class="updbar"><span class="dot work"></span><span>업데이트 중 · ${esc(u.updating)}</span><span class="sp"></span><span class="ink3">끝나면 화면이 저절로 새로 열려요</span></div>`;
+  if (u.updating) return `<div class="updcard" role="status" aria-live="polite" aria-label="업데이트하는 중"><div class="uc-head"><h3>업데이트하는 중</h3></div><p>${esc(u.updating)}</p><div class="uc-bar"><i></i></div><p class="uc-sub">끝나면 화면이 저절로 새로 열려요.</p></div>`;
   if (!u.available || S.updHide === u.latest) return '';
-  const first = (u.notes || '').split('\n').map((l) => l.replace(/^[-*\s]+/, '').trim()).find(Boolean) || '';
-  return `<div class="updbar"><span>새 버전 <b class="num">v${esc(u.latest)}</b>이 나왔어요</span>${first ? `<span class="ink3 updnote" title="${esc(u.notes)}">${esc(first)}</span>` : ''}<span class="sp"></span><button class="btn" data-act="updlater">나중에</button><button class="btn pri" data-act="update">업데이트</button></div>`;
+  const notes = (u.notes || '').trim();
+  return `<div class="updcard" role="complementary" aria-live="polite" aria-label="새 버전 알림"><div class="uc-head"><h3>새 버전이 나왔어요</h3><button class="uc-x" data-act="updlater" aria-label="나중에 하기" title="나중에">${X_SVG}</button></div><p>AI 학교 허브 <span class="num">v${esc(u.latest)}</span>을 받을 수 있어요.</p><p class="uc-sub">누르면 새 버전으로 바꾸고 저절로 다시 켜져요. 맡긴 일과 대화는 그대로 남아요.</p>${notes && S.updNotes ? `<div class="uc-notes">${esc(notes)}</div>` : ''}${notes ? `<button class="uc-link" data-act="updnotes">${S.updNotes ? '바뀐 내용 접기' : '바뀐 내용 보기'}</button>` : ''}<button class="btn pri uc-go" data-act="update">업데이트</button></div>`;
+}
+let updShown = '';
+function renderUpd() {
+  let box = $('#updpop'); if (!box) { box = document.createElement('div'); box.id = 'updpop'; document.body.appendChild(box); }
+  // 오른쪽에 내장 브라우저(별도 화면)가 떠 있으면 그 밑에 가려지므로 왼쪽 아래로 옮긴다
+  box.classList.toggle('left', S.view === 'work' && S.sideTab === 'preview' && nativeOk());
+  const h = updCardHtml(); if (h === updShown) return;
+  const was = !!updShown; updShown = h; box.innerHTML = h;
+  if (h && !was) box.firstElementChild.classList.add('in');
 }
 
 // ── 오늘 ──
@@ -125,9 +179,10 @@ function newTaskForm(where) {
   return `<form data-form="newtask" data-where="${where}" style="display:flex;flex-direction:column;gap:8px">
    ${ai.none ? `<div class="warnbox">Claude·Codex 둘 다 로그인이 필요해요. <button type="button" class="linkbtn" data-act="settings" data-tab="ai">AI 로그인 열기</button></div>` : ''}
    <div class="field"><input name="title" placeholder="작업 이름 (예: 4주차 수업 정리 덱)" value="${esc(pf?.title || '')}" required></div>
-   <div class="field area"><textarea name="text" rows="4" placeholder="총괄 비서에게 평소 말하듯 적어 주세요. 예) 이 메모로 블로그 글이랑 스레드 2편, 카드뉴스 5장 만들어줘">${esc(pf?.text || '')}</textarea></div>
+   ${attStrip('new-' + where)}<div class="field area"><textarea name="text" rows="4" placeholder="총괄 비서에게 평소 말하듯 적어 주세요. 예) 이 메모로 블로그 글이랑 스레드 2편, 카드뉴스 5장 만들어줘 · 모르는 화면은 캡처해서 붙여 넣어도 돼요">${esc(pf?.text || '')}</textarea></div>
    ${dirPicker(where)}
-   <div class="ctl"><div class="field" style="min-height:32px"><select name="runtime" aria-label="맡길 AI">${opt('codex')}${opt('claude')}</select></div><span class="sp"></span><button class="go" ${ai.none ? 'disabled' : ''}>맡기기</button></div>
+   <div class="ctl"><div class="field" style="min-height:32px"><select name="runtime" aria-label="맡길 AI" data-rtsel>${opt('codex')}${opt('claude')}</select></div><div class="field" style="min-height:32px"><select name="model" aria-label="모델" aria-describedby="mhelp-${where}">${modelOpts(ai.def || 'codex')}</select></div>${attBtn('new-' + where)}<span class="sp"></span><button class="go" ${ai.none ? 'disabled' : ''}>맡기기</button></div>
+   <p class="mhelp" id="mhelp-${where}">모델은 맨 위가 기본이에요. 깊이 생각할 일은 위쪽 모델을 골라 새 대화로 맡기세요.</p>
 </form>`;
 }
 // 다른 폴더에서 작업하기(선택): 기본은 허브가 새 폴더를 만든다
@@ -141,7 +196,7 @@ function dirListHtml(where) {
   const d = S.dir[where] || {}; const list = d.list;
   const def = `<button type="button" class="dirrow ${!d.path ? 'on' : ''}" data-act="dirpick" data-where="${where}" data-path=""><span class="dn">새 폴더 (기본)</span><span class="dp">허브가 이 작업만의 폴더를 만들어요</span></button>`;
   if (!list) return def + '<p class="empty" style="padding:8px 10px">폴더 찾는 중…</p>';
-  return def + (list.map((x) => `<button type="button" class="dirrow ${d.path === x.path ? 'on' : ''}" data-act="dirpick" data-where="${where}" data-path="${esc(x.path)}"><span class="dn">${esc(x.name)}</span><span class="dp">${esc(x.home)}</span></button>`).join('') || '<p class="empty" style="padding:8px 10px">맞는 폴더가 없어요.</p>');
+  return def + (list.map((x) => `<button type="button" class="dirrow ${d.path === x.path ? 'on' : ''}" data-act="dirpick" data-where="${where}" data-path="${esc(x.path)}"><span class="dn">${esc(x.name)}</span><span class="dp">${esc(x.home).replace(/([\\/])/g, '$1<wbr>')}</span></button>`).join('') || '<p class="empty" style="padding:8px 10px">맞는 폴더가 없어요.</p>');
 }
 let dirTimer;
 async function loadDirs(where, q) { const d = (S.dir[where] = S.dir[where] || {}); d.q = q; try { d.list = await api(`/api/dirs?q=${encodeURIComponent(q || '')}`); } catch { d.list = []; } const el = document.querySelector(`[data-dirlist="${where}"]`); if (el) el.innerHTML = dirListHtml(where); }
@@ -170,9 +225,9 @@ function splitHtml() {
   const pane = (id) => {
     const t = S.splitTasks[id]; if (!t) { if (!(S.splitLoading ||= new Set()).has(id)) { S.splitLoading.add(id); loadSplit(id).then(() => { S.splitLoading.delete(id); render(); }); } return `<div class="spl"><p class="empty" style="padding:16px">불러오는 중…</p></div>`; }
     const busy = t.status === 'working';
-    return `<div class="spl" data-id="${id}"><div class="th"><button class="btn mob-only" data-act="pane" data-p="list" aria-label="목록으로">${ic('back', 's')}</button><span class="dot ${busy ? 'work' : t.status === 'error' ? 'err' : 'idle'}"></span><h3 title="${esc(t.title)}">${esc(t.title)}</h3><span class="chip">${rtName(t.runtime)}</span>${busy ? '<span class="st work">AI가 일하는 중</span>' : ''}<span class="sp"></span><button class="btn" data-act="splone" data-id="${id}" title="이 대화만 크게 보기">${ic('eye', 's')}</button><button class="btn" data-act="splx" data-id="${id}" title="이 칸 닫기" aria-label="이 칸 닫기">×</button></div>
+    return `<div class="spl" data-id="${id}"><div class="th"><button class="btn mob-only" data-act="pane" data-p="list" aria-label="목록으로">${ic('back', 's')}</button><span class="dot ${busy ? 'work' : t.status === 'error' ? 'err' : 'idle'}"></span><h3 title="${esc(t.title)}">${esc(t.title)}</h3>${rtChip(t)}${ctxChip(t)}${busy ? '<span class="st work">AI가 일하는 중</span>' : ''}<span class="sp"></span><button class="btn" data-act="splone" data-id="${id}" title="이 대화만 크게 보기">${ic('eye', 's')}</button><button class="btn" data-act="splx" data-id="${id}" title="이 칸 닫기" aria-label="이 칸 닫기">×</button></div>
      <div class="chat" data-chat="${id}">${chatHtml(t) || '<p class="empty">아직 대화가 없어요.</p>'}${busy ? '<div class="typing">AI가 일하는 중이에요…</div>' : ''}</div>
-     <div class="comp"><form class="box" data-form="psend" data-id="${id}"><textarea name="text" aria-label="메시지" placeholder="이어서 할 말 · Enter로 보내기" ${busy ? 'disabled' : ''}></textarea><div class="ctl"><span class="sp"></span>${busy ? `<button type="button" class="btn" data-act="pstop" data-id="${id}">${ic('stop', 's')}멈추기</button>` : `<button class="send" aria-label="보내기">${ic('up')}</button>`}</div></form></div></div>`;
+     <div class="comp"><form class="box" data-form="psend" data-id="${id}">${attStrip('p-' + id)}<textarea name="text" aria-label="메시지" placeholder="이어서 할 말 · Enter로 보내기" ${busy ? 'disabled' : ''}></textarea><div class="ctl">${busy ? '' : attBtn('p-' + id)}<span class="sp"></span>${busy ? `<button type="button" class="btn" data-act="pstop" data-id="${id}">${ic('stop', 's')}멈추기</button>` : `<button class="send" aria-label="보내기">${ic('up')}</button>`}</div></form></div></div>`;
   };
   const slots = ids.map(pane);
   if (ids.length < 2) slots.push(`<div class="spl slot"><p class="empty">왼쪽 목록에서 작업을 누르면<br>이 칸에 들어와요.</p></div>`);
@@ -202,9 +257,9 @@ function chatHtml(t) {
     const isStep = m.role === 'log' && m.kind !== 'skill' && m.kind !== 'file' && !/^(파일|스킬 사용) ·/.test(m.text);
     if (isStep) { steps.push(m); continue; }
     flush();
-    if (m.role === 'me') out.push(`<div class="u ${m.sys ? 'sys' : ''}">${esc(m.text)}</div>`);
+    if (m.role === 'me') out.push(`<div class="u ${m.sys ? 'sys' : ''}">${(m.images || []).length ? `<div class="uimgs">${m.images.map((n, i) => `<button type="button" class="uimg" data-act="imgview" data-task="${t.id}" data-src="/api/tasks/${t.id}/img/${encodeURIComponent(n)}" aria-label="보낸 사진 ${i + 1} 크게 보기"><img src="/api/tasks/${t.id}/img/${encodeURIComponent(n)}" alt=""></button>`).join('')}</div>` : ''}${esc(m.text)}</div>`);
     else if (m.role === 'ai') out.push(`<div class="a">${md(m.text)}</div>`);
-    else if (m.role === 'warn') out.push(`<div class="warnbox">${esc(m.text)}${m.kind === 'login' || m.kind === 'missing' ? ` <button class="linkbtn" data-act="settings" data-tab="ai">AI 로그인 열기</button>` : ''}${m.detail ? `<details class="why"><summary>자세히</summary><div>${esc(m.detail)}</div></details>` : ''}</div>`);
+    else if (m.role === 'warn') out.push(`<div class="warnbox" role="alert">${esc(m.text)}${m.kind === 'login' || m.kind === 'missing' ? ` <button class="linkbtn" data-act="settings" data-tab="ai">AI 로그인 열기</button>` : ''}${m.detail ? `<details class="why"><summary>자세히</summary><div>${esc(m.detail)}</div></details>` : ''}</div>`);
     else if (m.kind === 'skill' || /^스킬 사용 ·/.test(m.text)) out.push(`<div class="log skill">${ic('users', 's')}${esc(m.text)}</div>`);
     else out.push(`<div class="log">${ic('file', 's')}${esc(m.text)}</div>`);
   }
@@ -215,12 +270,12 @@ function taskMain() {
   const t = S.task; const busy = t.status === 'working'; const pct = ctxPct(t);
   const band = pct != null && pct >= 50 && !t.continuedTo && !t.ctxDismissed && !busy ? `<div class="ctxband"><div><b>대화가 길어졌어요.</b> 더 길어지면 앞 내용을 흐리게 기억해요. 새 대화로 이어가면 지금 AI가 정리 카드를 쓰고, 같은 폴더의 새 대화가 그 카드부터 시작해요.</div><div class="acts" style="margin:0"><button class="btn dark" data-act="ctxgo">새 대화로 이어가기</button><button class="btn" data-act="ctxno">나중에</button></div></div>`
     : t.continuedTo ? `<div class="ctxband done"><div>이 대화는 새 대화로 이어졌어요.</div><button class="btn" data-act="open" data-id="${t.continuedTo}">이어진 대화 열기</button></div>` : '';
-  return `<div class="mainc"><div class="th"><button class="btn mob-only" data-act="pane" data-p="list" aria-label="목록으로">${ic('back', 's')}</button><span class="dot ${busy ? 'work' : 'idle'}"></span><h3>${esc(t.title)}</h3><span class="chip">${rtName(t.runtime)}</span><span class="sp"></span>
+  return `<div class="mainc"><div class="th"><button class="btn mob-only" data-act="pane" data-p="list" aria-label="목록으로">${ic('back', 's')}</button><span class="dot ${busy ? 'work' : 'idle'}"></span><h3>${esc(t.title)}</h3>${rtChip(t)}${ctxChip(t)}<span class="sp"></span>
    <button class="btn" data-act="reveal" data-what="folder" title="${esc(t.cwd)}">${ic('folder', 's')}폴더 열기</button><button class="btn" data-act="reveal" data-what="terminal">${ic('term', 's')}터미널 열기</button>
    <button class="btn mob-only" data-act="pane" data-p="side" aria-label="미리보기">${ic('eye', 's')}</button></div>${band}
    <div class="chat" id="chat">${chatHtml(t) || '<p class="empty">아래에 맡길 일을 적어 주세요. 허브에 있는 AI 직원(스킬)을 AI가 알아서 불러 써요.</p>'}${busy ? '<div class="typing">AI가 일하는 중이에요…</div>' : ''}</div>
-   <div class="comp"><form class="box" data-form="send"><textarea name="text" aria-label="메시지" placeholder="이어서 할 말 · Enter로 보내기, Shift+Enter 줄바꿈" ${busy ? 'disabled' : ''}></textarea>
-   <div class="ctl"><span class="crumb">${t.picked ? esc(base(t.cwd)) + ' 폴더에서 작업' : ''}</span><span class="sp"></span>${busy ? `<button type="button" class="btn" data-act="stop">${ic('stop', 's')}멈추기</button>` : `<button class="send" aria-label="보내기">${ic('up')}</button>`}</div></form></div></div>`;
+   <div class="comp"><form class="box" data-form="send">${attStrip('send-' + t.id)}<textarea name="text" aria-label="메시지" placeholder="이어서 할 말 · Enter로 보내기, Shift+Enter 줄바꿈 · 캡처는 붙여 넣기" ${busy ? 'disabled' : ''}></textarea>
+   <div class="ctl">${busy ? '' : attBtn('send-' + t.id)}<span class="crumb">${t.picked ? esc(base(t.cwd)) + ' 폴더에서 작업' : ''}</span><span class="sp"></span>${busy ? `<button type="button" class="btn" data-act="stop">${ic('stop', 's')}멈추기</button>` : `<button class="send" aria-label="보내기">${ic('up')}</button>`}</div></form></div></div>`;
 }
 function sidePanel() {
   const t = S.task; let pane = '';
@@ -229,6 +284,7 @@ function sidePanel() {
   if (S.sideTab === 'preview') {
     if (nativeOk()) pane = bar + `<div id="native-slot" style="flex:1;min-height:300px;background:#fff"></div>`;
     else if (S.mdText != null) pane = bar + `<div class="mdview">${md(S.mdText)}</div>`;
+    else if (/\/img\/|\.(png|jpe?g|gif|webp)$/i.test(S.previewSrc.split('?')[0])) pane = bar + `<div class="imgfit"><img src="${esc(S.previewSrc)}" alt="미리보기 사진"></div>`; // 사진은 칸에 맞춰 보여 준다
     else pane = bar + (S.previewSrc ? `<iframe class="preview" src="${esc(S.previewSrc)}"></iframe>` : '<p class="empty" style="padding:16px">AI가 HTML·이미지·문서를 만들면 여기 바로 떠요.</p>');
   } else if (S.sideTab === 'files') pane = `<div class="acts" style="padding:10px 16px;margin:0"><button class="btn" data-act="reveal" data-what="folder">${ic('folder', 's')}폴더 열기</button></div>` + (S.files.map((f) => `<button class="file" data-act="preview" data-name="${esc(f.name)}"><span class="fi">${ic('file')}</span><div><b>${esc(f.name)}</b><small>${Math.max(1, Math.round(f.size / 1024))}KB · ${ago(f.mtime)}</small></div></button>`).join('') || '<p class="empty" style="padding:16px">아직 결과물이 없어요.</p>');
   else pane = `<div style="padding:16px;display:flex;flex-direction:column;gap:12px"><div class="card"><h4>이 작업</h4><p class="md">작업 폴더: ${esc(base(t.cwd))}\n만든 때: ${new Date(t.created).toLocaleString('ko-KR')}\n맡긴 AI: ${rtName(t.runtime)}${(t.skillsUsed || []).length ? `\n쓴 스킬: ${esc(t.skillsUsed.join(', '))}` : ''}</p>
@@ -337,7 +393,7 @@ function sbHtml() {
   const parts = [];
   if (!a || a.codex) parts.push(u && u.weekly != null ? `<span class="mt">Codex 이번 주 ${bar(u.weekly)}<b class="num">${u.weekly}%</b> 씀${day(u.weeklyReset)}</span>` : '<span>Codex 사용량 확인 중…</span>');
   if (!a || a.claude) parts.push(cl && (cl.weekly != null || cl.fiveHour != null) ? `<span class="mt">Claude 이번 주 ${bar(cl.weekly ?? 0)}<b class="num">${cl.weekly ?? 0}%</b> 씀${day(cl.weeklyReset)}</span>` : '<span>Claude 사용량 확인 중…</span>');
-  return `${parts.join('')}<span class="sp"></span><span>AI 학교 허브${S.upd?.current && S.upd.current !== 'dev' ? ` v${esc(S.upd.current)}` : ''}</span>`;
+  return `${parts.join('')}<span class="sp"></span><span class="ver">AI 학교 허브${S.upd?.current && S.upd.current !== 'dev' ? ` v${esc(S.upd.current)}` : ''}</span>`;
 }
 function renderSB() { const el = $('#sb'); if (el) el.innerHTML = sbHtml(); }
 
@@ -362,22 +418,24 @@ function render() {
   const draft = $('[data-form=send] textarea')?.value;
   const pdrafts = [...document.querySelectorAll('[data-form=psend]')].map((f) => [f.dataset.id, f.elements.text.value, document.activeElement === f.elements.text]);
   const pscroll = Object.fromEntries([...document.querySelectorAll('[data-chat]')].map((c) => [c.dataset.chat, c.scrollHeight - c.scrollTop - c.clientHeight < 40]));
-  const forms = [...document.querySelectorAll('[data-form=newtask]')].map((f) => [f.dataset.where, f.elements.title.value, f.elements.text.value, f.elements.runtime.value]);
+  const forms = [...document.querySelectorAll('[data-form=newtask]')].map((f) => [f.dataset.where, f.elements.title.value, f.elements.text.value, f.elements.runtime.value, f.elements.model?.value || '']);
   const foc = document.activeElement; const focSel = foc?.dataset?.dirq ? `[data-dirq="${foc.dataset.dirq}"]` : foc?.form?.dataset?.form === 'newtask' ? `[data-form=newtask][data-where="${foc.form.dataset.where}"] [name="${foc.name}"]` : null;
   const body = S.view === 'today' ? `<div class="body">${todayView()}</div>` : S.view === 'work' ? workView() : S.view === 'staff' ? `<div class="body">${staffView()}</div>` : settingsView();
-  $('#root').innerHTML = topbar() + updBar() + body + `<div class="sb" id="sb">${sbHtml()}</div>` + mtab() + (!S.st.me ? meModal() : (!S.st.introSeen || S.introOpen) ? introModal() : '');
-  if (!S.prefill) for (const [w, ti, tx, rt] of forms) { const f = $(`[data-form=newtask][data-where="${w}"]`); if (f) { const E = f.elements; E.title.value = ti; E.text.value = tx; if (!E.runtime.querySelector(`option[value="${rt}"]`)?.disabled) E.runtime.value = rt; } }
+  $('#root').innerHTML = topbar() + body + `<div class="sb" id="sb">${sbHtml()}</div>` + mtab() + (!S.st.me ? meModal() : (!S.st.introSeen || S.introOpen) ? introModal() : '');
+  if (!S.prefill) for (const [w, ti, tx, rt, mo] of forms) { const f = $(`[data-form=newtask][data-where="${w}"]`); if (f) { const E = f.elements; E.title.value = ti; E.text.value = tx; if (!E.runtime.querySelector(`option[value="${rt}"]`)?.disabled) E.runtime.value = rt; if (E.model) { E.model.innerHTML = modelOpts(E.runtime.value, mo); } } }
   S.prefill = null;
   if (focSel) { const el = $(focSel); if (el) { el.focus(); try { const n = el.value.length; el.setSelectionRange(n, n); } catch {} } }
   const c = $('#chat'); if (c) c.scrollTop = c.scrollHeight;
   for (const el of document.querySelectorAll('[data-chat]')) if (pscroll[el.dataset.chat] !== false) el.scrollTop = el.scrollHeight;
   for (const [id, v, f] of pdrafts) { const el = $(`[data-form=psend][data-id="${id}"] textarea`); if (el) { if (v) el.value = v; if (f) el.focus(); } }
   const ta = $('[data-form=send] textarea'); if (ta && draft) ta.value = draft;
+  renderUpd();
+  { const md = $('.modal'); if (md && !md.contains(document.activeElement)) md.querySelector('input,button')?.focus(); }
   placeNative();
 }
 const INTRO_SAY = '오늘 한 일 메모야. 이걸로 스레드 글 2개 써줘.\n\n(여기에 오늘 한 일을 적거나 붙여 넣기)';
 function introModal() {
-  return `<div class="modal"><div class="card intro"><h4>AI 학교 허브는 이럴 때 쓰세요</h4>
+  return `<div class="modal" role="dialog" aria-modal="true" aria-label="AI 학교 허브 안내"><div class="card intro"><h4>AI 학교 허브는 이럴 때 쓰세요</h4>
    <ul class="introl"><li>AI에게 일을 맡기고, AI가 만든 글이나 페이지를 바로 옆 화면에서 봐요.</li><li>AI 직원 24명이 들어 있어요. 총괄 비서에게 말하면 필요한 직원을 알아서 불러요.</li><li>한 번 말한 내 방식은 규칙으로 쌓여서 다음 일부터 지켜요.</li></ul>
    <p class="md">터미널로 이미 잘 쓰고 계시면 그대로 쓰셔도 돼요. 만든 걸 눈으로 보면서 하고 싶을 때 허브를 여시면 돼요.</p>
    <div class="introex"><b>처음엔 이렇게 맡겨 보세요</b><p class="md">저는 그날 한 일을 메모해 두고, 그 메모로 스레드 글을 써요.</p><div class="u">오늘 한 일 메모야. 이걸로 스레드 글 2개 써줘.</div></div>
@@ -385,7 +443,7 @@ function introModal() {
    <p class="crumb">이 안내는 설정 › 내 정보에서 다시 볼 수 있어요.</p></div></div>`;
 }
 async function closeIntro() { S.introOpen = false; if (!S.st.introSeen) { S.st.introSeen = true; try { await api('/api/intro', { method: 'POST', body: { seen: true } }); } catch {} } }
-function meModal() { return `<div class="modal"><form class="card" data-form="me"><h4>처음 오셨어요</h4><p class="md" style="margin-bottom:10px">허브에서 부를 이름을 적어 주세요. 이 PC 밖으로 나가지 않아요.</p><div class="field" style="margin-bottom:12px"><input name="me" placeholder="이름" aria-label="이름" required></div><button class="btn dark">시작</button></form></div>`; }
+function meModal() { return `<div class="modal" role="dialog" aria-modal="true" aria-label="처음 오셨어요"><form class="card" data-form="me"><h4>처음 오셨어요</h4><p class="md" style="margin-bottom:10px">허브에서 부를 이름을 적어 주세요. 이 PC 밖으로 나가지 않아요.</p><div class="field" style="margin-bottom:12px"><input name="me" placeholder="이름" aria-label="이름" required></div><button class="btn dark">시작</button></form></div>`; }
 
 // ── 누르기 ──
 async function reveal(what, root) { const r = await api(root ? '/api/reveal' : `/api/tasks/${S.taskId}/reveal`, { method: 'POST', body: { what } }); if (!r.ok) toast(r.msg || '열지 못했어요'); }
@@ -395,7 +453,11 @@ document.addEventListener('click', async (e) => {
   try {
     if (a === 'go') { S.view = b.dataset.v; if (S.view === 'work') S.pane = S.task ? S.pane : 'list'; if (S.view === 'settings') { S.pane = 'nav'; loadSetTab(); } if (S.view === 'staff' && !S.staff) { S.staff = await api('/api/staff'); S.oss = await api('/api/open-source').catch(() => []); } if (S.view === 'today') S.my = await api('/api/my').catch(() => S.my); render(); }
     else if (a === 'update') { await api('/api/update', { method: 'POST' }); S.upd.updating = '시작'; render(); }
-    else if (a === 'updlater') { S.updHide = S.upd?.latest; render(); }
+    else if (a === 'updlater') { // 살짝 흐려진 뒤 사라진다
+      const c = $('#updpop .updcard'); const off = () => { S.updHide = S.upd?.latest; render(); };
+      if (c && !matchMedia('(prefers-reduced-motion: reduce)').matches) { c.classList.add('out'); setTimeout(off, 150); } else off();
+    }
+    else if (a === 'updnotes') { S.updNotes = !S.updNotes; render(); }
     else if (a === 'settings') { S.view = 'settings'; if (b.dataset.tab) { S.setTab = b.dataset.tab; S.pane = 'page'; } else S.pane = 'nav'; render(); loadSetTab(); }
     else if (a === 'settab') { S.setTab = b.dataset.tab; S.pane = 'page'; render(); loadSetTab(); }
     else if (a === 'open') { if (b.dataset.id) { if (S.split && S.view === 'work' && b.classList.contains('row')) await addSplit(b.dataset.id); else { if (S.split) { S.split = false; saveSplit(); } await openTask(b.dataset.id); } } }
@@ -408,6 +470,10 @@ document.addEventListener('click', async (e) => {
     else if (a === 'pstop') { b.disabled = true; await api(`/api/tasks/${b.dataset.id}/stop`, { method: 'POST' }); }
     else if (a === 'dirtoggle') { const w = b.dataset.where; const d = (S.dir[w] = S.dir[w] || {}); d.open = !d.open; render(); if (d.open) { setTimeout(() => $(`[data-dirq="${w}"]`)?.focus(), 30); loadDirs(w, d.q || ''); } }
     else if (a === 'dirpick') { const w = b.dataset.where; const d = (S.dir[w] = S.dir[w] || {}); d.path = b.dataset.path; d.open = false; render(); }
+    else if (a === 'attdel') { (S.att[b.dataset.k] || []).splice(Number(b.dataset.i), 1); render(); }
+    else if (a === 'imgview') { await setPreview(b.dataset.src); S.sideTab = 'preview'; if (matchMedia('(max-width:860px)').matches) S.pane = 'side'; if (S.split && S.taskId !== b.dataset.task && b.dataset.task) { S.split = false; saveSplit(); await openTask(b.dataset.task); S.sideTab = 'preview'; await setPreview(b.dataset.src); } render(); }
+    else if (a === 'attpick') { b.nextElementSibling?.click(); }
+    else if (a === 'ctxhelp') { toast(b.dataset.msg); }
     else if (a === 'ctxgo') { await api(`/api/tasks/${S.taskId}/continue`, { method: 'POST' }); toast('지금 AI가 정리 카드를 쓰는 중이에요. 끝나면 새 대화가 열려요'); await openTask(S.taskId, true); render(); }
     else if (a === 'ctxno') { await api(`/api/tasks/${S.taskId}/ctx-dismiss`, { method: 'POST' }); S.task.ctxDismissed = true; render(); }
     else if (a === 'pane') { S.pane = b.dataset.p; render(); }
@@ -438,12 +504,23 @@ document.addEventListener('click', async (e) => {
     else if (a === 'decide') { const r = await api('/api/learn/decide', { method: 'POST', body: { id: b.dataset.id, choice: b.dataset.c } }); toast(r.choice === 'discard' ? '버렸어요' : r.ok ? '넣었어요' : (r.msg || '넣지 못했어요')); S.pending = await api('/api/learn/pending'); S.rules = null; await load(); }
   } catch (err) { toast(err.message); S.scanBusy = false; render(); }
 });
-document.addEventListener('change', async (e) => { const el = e.target; if (el.dataset.act === 'consent') { await api('/api/learn/consent', { method: 'POST', body: { on: el.checked } }); await load(); } });
+document.addEventListener('change', async (e) => { const el = e.target; if (el.matches?.('[data-rtsel]')) { const ms = el.form.elements.model; if (ms) ms.innerHTML = modelOpts(el.value); return; } if (el.dataset?.attin) { await addImages(el.dataset.attin, el.files); el.value = ''; return; } if (el.dataset.act === 'consent') { await api('/api/learn/consent', { method: 'POST', body: { on: el.checked } }); await load(); } });
 document.addEventListener('input', (e) => { const el = e.target; if (el.dataset.dirq) { clearTimeout(dirTimer); const w = el.dataset.dirq, v = el.value; dirTimer = setTimeout(() => loadDirs(w, v), 180); } });
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && (S.introOpen || (S.st && S.st.me && !S.st.introSeen)) && $('.modal .intro')) { e.preventDefault(); closeIntro().then(render); return; }
   if (e.target.dataset?.dirq && e.key === 'Enter') { e.preventDefault(); const first = document.querySelector(`[data-dirlist="${e.target.dataset.dirq}"] .dirrow:nth-child(2)`); if (first) first.click(); return; }
   if (e.target.matches('[data-form=send] textarea, [data-form=psend] textarea') && e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); e.target.form.requestSubmit(); }
 });
+// 캡처 붙여 넣기(Ctrl+V / Cmd+V)와 끌어 놓기: 사진만 첨부로 받고, 글은 평소처럼 붙는다
+document.addEventListener('paste', (e) => {
+  const f = e.target.closest?.('form[data-form=send], form[data-form=psend], form[data-form=newtask]'); if (!f || !e.clipboardData) return;
+  const files = [...(e.clipboardData.items || [])].filter((it) => it.kind === 'file' && /^image\//.test(it.type)).map((it) => it.getAsFile()).filter(Boolean);
+  const types = [...(e.clipboardData.types || [])];
+  if (!files.length || types.includes('text/html') || types.includes('text/rtf')) return;
+  e.preventDefault(); addImages(attKey(f), files);
+});
+document.addEventListener('dragover', (e) => { if ([...(e.dataTransfer?.types || [])].includes('Files')) e.preventDefault(); });
+document.addEventListener('drop', (e) => { if (![...(e.dataTransfer?.types || [])].includes('Files')) return; e.preventDefault(); const f = e.target.closest?.('form[data-form=send], form[data-form=psend], form[data-form=newtask]'); if (f && e.dataTransfer.files?.length) addImages(attKey(f), e.dataTransfer.files); });
 // 미리보기 폭 끌어서 바꾸기
 document.addEventListener('pointerdown', (e) => {
   if (e.target.dataset?.drag !== 'side') return; e.preventDefault();
@@ -456,9 +533,18 @@ document.addEventListener('submit', async (e) => {
   e.preventDefault(); const f = e.target; const d = Object.fromEntries(new FormData(f)); const k = f.dataset.form;
   try {
     if (k === 'search') { S.q = d.q; S.res = d.q ? await api(`/api/search?q=${encodeURIComponent(d.q)}`) : []; render(); }
-    else if (k === 'newtask') { if (!d.runtime) return toast('먼저 설정 › AI 로그인에서 로그인해 주세요'); const t = await api('/api/tasks', { method: 'POST', body: d }); f.reset(); S.dir[f.dataset.where] = {}; await load(); await openTask(t.id); }
-    else if (k === 'psend') { if (!d.text.trim()) return; const id = f.dataset.id; f.querySelector('textarea').value = ''; await api(`/api/tasks/${id}/send`, { method: 'POST', body: { text: d.text } }); await loadSplit(id); render(); }
-    else if (k === 'send') { if (!d.text.trim()) return; f.querySelector('textarea').value = ''; await api(`/api/tasks/${S.taskId}/send`, { method: 'POST', body: { text: d.text } }); await openTask(S.taskId, true); render(); }
+    else if (k === 'newtask') { if (!d.runtime) return toast('먼저 설정 › AI 로그인에서 로그인해 주세요'); if (S.attBusy) return toast('사진을 준비하는 중이에요. 잠깐 뒤 맡겨 주세요'); const ak = attKey(f); const images = (S.att[ak] || []).map((x) => x.data); const t = await api('/api/tasks', { method: 'POST', body: { ...d, images } }); delete S.att[ak]; f.reset(); S.dir[f.dataset.where] = {}; await load(); await openTask(t.id); }
+    else if (k === 'psend' || k === 'send') {
+      if (S.attBusy) return toast('사진을 준비하는 중이에요. 잠깐 뒤 보내 주세요');
+      const ak = attKey(f); const att = S.att[ak] || []; const images = att.map((x) => x.data); if (!d.text.trim() && !images.length) return;
+      const id = k === 'psend' ? f.dataset.id : S.taskId; const sel = k === 'psend' ? `[data-form=psend][data-id="${id}"] textarea` : '[data-form=send] textarea';
+      // 보내는 순간 입력칸·사진을 비운다(서버 알림으로 화면이 다시 그려져도 보낸 글이 남지 않게). 실패하면 되돌린다.
+      f.querySelector('textarea').value = ''; delete S.att[ak]; render();
+      try { await api(`/api/tasks/${id}/send`, { method: 'POST', body: { text: d.text, images } }); }
+      catch (err) { const ta = $(sel); if (ta && !ta.value) ta.value = d.text; if (att.length) S.att[ak] = att; render(); const ta2 = $(sel); if (ta2 && !ta2.value) ta2.value = d.text; throw err; }
+      if (k === 'psend') await loadSplit(id); else await openTask(S.taskId, true);
+      render();
+    }
     else if (k === 'url') { let u = d.u.trim(); if (!u) return; if (!/^(https?:|\/)/.test(u)) u = /\.\w{1,5}$/.test(u) && !/^www\./.test(u) && S.files.some((x) => x.name === u) ? fileUrl(u) : 'https://' + u; await setPreview(u); render(); }
     else if (k === 'me') { await api('/api/me', { method: 'POST', body: d }); await load(); const a = S.st.auth; if (a && !a.codex && !a.claude) { S.view = 'settings'; S.setTab = 'ai'; S.pane = 'page'; render(); loadSetTab(); toast('먼저 AI 로그인을 해 주세요'); } else toast('오늘 탭의 새로 맡기기에서 첫 일을 맡겨 보세요'); }
     else if (k === 'authcode') { if (!d.code.trim()) return toast('코드를 붙여 넣어 주세요'); const r = await api(`/api/auth/${f.dataset.who}/code`, { method: 'POST', body: { code: d.code } }); toast(r.msg); }
@@ -490,7 +576,7 @@ es.onmessage = async (m) => {
     else { if (S.upd) S.upd.updating = ev.step; render(); }
   }
   if (ev.type === 'login') { const done = ev.login?.state === 'done'; S.login[ev.who] = done ? null : ev.login; if (done) toast('로그인됐어요'); if (S.view === 'settings' && S.setTab === 'ai') { const f = document.activeElement?.form?.dataset?.form === 'authcode'; const v = $('[data-form=authcode] input')?.value; render(); const i = $('[data-form=authcode] input'); if (i && v) { i.value = v; if (f) i.focus(); } } }
-  if (ev.type === 'auth') { if (S.st) { S.st.auth = { codex: ev.codex, claude: ev.claude }; if (S.view === 'settings' && S.setTab === 'ai') { try { S.auth = await api('/api/auth'); syncLogin(); } catch {} } else S.auth = null; render(); } } // 화면을 비우지 않고 새 상태로 바꾼다
+  if (ev.type === 'auth') { api('/api/models').then((m) => { S.models = m; }).catch(() => {}); if (S.st) { S.st.auth = { codex: ev.codex, claude: ev.claude }; if (S.view === 'settings' && S.setTab === 'ai') { try { S.auth = await api('/api/auth'); syncLogin(); } catch {} } else S.auth = null; render(); } } // 화면을 비우지 않고 새 상태로 바꾼다
   if (ev.type === 'learn') { S.learnBusy = false; S.pending = await api('/api/learn/pending'); await load(); toast(ev.ok ? `점검 끝 · 대화 ${ev.files}개에서 후보 ${ev.candidates}개` : '점검하지 못했어요. 잠시 뒤 다시 눌러 주세요'); }
   if (ev.type === 'continued') { await load(); if (ev.ok && ev.task === S.taskId) { await openTask(ev.to); toast('새 대화로 이어갔어요'); } else if (!ev.ok) toast('정리 카드를 못 받았어요. 다시 눌러 주세요'); }
 };
@@ -511,4 +597,5 @@ async function waitRestart(v) {
   }
   toast('다시 켜지지 않았어요. 앱을 껐다 켜 주세요');
 }
+api('/api/models').then((m) => { S.models = m; render(); }).catch(() => {});
 load().then(route).then(loadUsage).then(checkUpdate); setInterval(loadUsage, 120000); setInterval(checkUpdate, 6 * 3600e3);

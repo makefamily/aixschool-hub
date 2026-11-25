@@ -169,7 +169,7 @@ code.k{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;backgrou
 .dirrow{display:flex;flex-direction:column;align-items:flex-start;gap:0;padding:6px 10px;border-radius:6px;text-align:left;width:100%}
 .dirrow:hover{background:var(--raised)}.dirrow.on{background:var(--accent-soft)}
 .dirrow .dn{color:var(--ink);font-weight:500;font-size:12.5px;display:flex;gap:6px;align-items:center}
-.dirrow .dp{color:var(--ink3);font-size:11.5px;word-break:break-all}
+.dirrow .dp{color:var(--ink3);font-size:11.5px;overflow-wrap:anywhere} /* 경로는 / 뒤에서 끊는다(<wbr>) */
 .linkbtn{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;color:var(--ink2);font-size:12.5px;padding:4px 0}
 .linkbtn:hover{color:var(--ink)}
 /* 맥락 */
@@ -243,7 +243,7 @@ ul.mylist{list-style:none;margin:8px 0 0;display:flex;flex-direction:column;gap:
 .card.chief{border-color:var(--accent-line);background:var(--accent-soft);margin-bottom:8px}.card.chief p{font-size:14px;color:var(--ink2)}.card.chief .q{font-size:12.5px;color:var(--ink3);margin-top:6px}
 
 /* 업데이트 알림 카드: 오른쪽 아래, 상태 줄 바로 위 */
-#updpop{position:fixed;right:0;bottom:32px;z-index:55;width:392px;max-width:100vw;padding:8px 16px 12px;pointer-events:none}
+#updpop{position:fixed;right:0;bottom:32px;z-index:45;width:392px;max-width:100vw;padding:8px 16px 12px;pointer-events:none}
 #updpop.left{right:auto;left:0}
 #updpop>*{pointer-events:auto}
 .updcard{display:flex;flex-direction:column;gap:10px;padding:14px;background:var(--card);border:1px solid rgba(23,23,23,.14);border-radius:var(--r-card);box-shadow:0 11px 32px -6px rgba(0,0,0,.2),0 2px 6px rgba(0,0,0,.08);font-size:14px;line-height:1.5;color:var(--ink3)}
@@ -284,3 +284,75 @@ ul.mylist{list-style:none;margin:8px 0 0;display:flex;flex-direction:column;gap:
 .introl{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;line-height:1.55}
 .introex{border:1px solid var(--line);border-radius:var(--r-card);padding:12px 14px;display:flex;flex-direction:column;gap:8px}
 .introex .u{align-self:flex-start}
+
+/* 붙여 넣은 사진 */
+.atts{display:flex;gap:8px;flex-wrap:wrap;padding:2px 0 8px}
+.att{position:relative;width:64px;height:64px;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#f5f5f5}
+.att img{width:100%;height:100%;object-fit:cover;display:block}
+.att button{position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,.65);color:#fff;font-size:14px;line-height:20px;text-align:center;padding:0}
+.attbtn{cursor:pointer}
+.uimgs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.uimgs img{max-width:220px;max-height:160px;border-radius:8px;cursor:zoom-in;display:block;border:1px solid rgba(0,0,0,.08)}
+
+/* 대화가 얼마나 찼나 */
+.ctxchip{height:24px;padding:0 8px;border-radius:6px;background:var(--raised);color:var(--ink2);display:inline-flex;align-items:center;gap:6px;font-size:12px;white-space:nowrap}
+.ctxchip .bar{width:36px;height:6px;border-radius:3px;background:rgba(0,0,0,.1);overflow:hidden;display:inline-block}
+.ctxchip .bar i{display:block;height:100%;background:#22a06b}
+.ctxchip.warn{color:#9a5b00}.ctxchip.warn .bar i{background:#e8a317}
+.ctxchip.hot{color:#b42318}.ctxchip.hot .bar i{background:#d92d20}
+
+/* ── 2026-11-25 점검 반영 ── */
+/* 대화 입력 상자 포커스 표시(새 작업 칸과 같게) */
+.box:focus-within{border-color:var(--accent-line);box-shadow:0 0 0 3px var(--accent-soft)}
+/* 사진 버튼·보낸 사진·빼기 버튼 */
+.uimg{padding:0;border:0;background:none;border-radius:8px;display:block;cursor:zoom-in}
+.uimg:focus-visible,.attbtn:focus-visible,.mchip:focus-visible,.ctxchip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.uimgs .uimg img{max-width:220px;max-height:160px;border-radius:8px;display:block;border:1px solid rgba(0,0,0,.08)}
+.att button{width:26px;height:26px;line-height:26px;font-size:16px}
+.mchip,.ctxchip{border:0;cursor:pointer;font:inherit;font-size:12px}
+.mhelp{font-size:11.5px;color:var(--ink3);margin:-2px 0 0}
+/* 대화 머리: 긴 제목은 말줄임, 칩·막대는 제목 옆에 붙인다 */
+.th h3{min-width:0;flex:0 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.th .chip,.th .ctxchip{flex:none;white-space:nowrap}
+/* 나란히 보기 칸 머리: 칩이 세로로 쪼개지지 않게 */
+.spl .th .chip,.spl .th .ctxchip{flex:none;white-space:nowrap}
+.spl .th h3{flex:1 1 60px}
+/* % 막대 대비 */
+.ctxchip .bar{background:rgba(0,0,0,.18)}
+.ctxchip .bar i{background:#1a7f55}.ctxchip.warn .bar i{background:#b86e00}.ctxchip.hot .bar i{background:#c4281c}
+/* 경고 상자를 안내와 구분 */
+.warnbox{background:#fdf3f2;border-color:rgba(196,40,28,.18);border-left:3px solid var(--late);color:var(--ink)}
+/* 상태 알약 폭 맞춤(최근 작업 제목 줄 맞춤) */
+.wl .st{min-width:56px;justify-content:center}
+/* 접힘 제목 누르기 쉽게 */
+details>summary{min-height:32px;display:list-item;padding:6px 0}
+@media (max-width:860px){
+  /* 대화 머리 한 줄: 폴더·터미널 버튼은 아이콘만 */
+  .mainc>.th{flex-wrap:nowrap}
+  .mainc>.th .btn[data-act=reveal]{font-size:0;gap:0;padding:0 8px}
+  .mainc>.th .btn[data-act=reveal] .i{margin:0}
+  .mainc>.th .ctxchip .bar{display:none}
+  .ctxband{padding:8px 10px;gap:8px}.ctxband>div:first-child{min-width:0;flex-basis:100%;font-size:12.5px}
+  /* 나란히 보기: 좁은 창에선 칩·막대 숨김(대화 안에서 확인) */
+  .spl .th .chip,.spl .th .ctxchip{display:none}
+  /* 토스트는 하단 상태 줄·탭 막대 위로 */
+  .toast{bottom:96px}
+  /* 하단 상태 줄의 버전 글자는 좁은 창에서 숨김 */
+  .sb .ver{display:none}
+}
+@media (max-width:480px){
+  /* 새 작업 칸: AI·모델 선택은 한 줄씩, 아래 줄은 [사진][맡기기] */
+  [data-form=newtask] .ctl>.field{flex:1 1 100%}
+  [data-form=newtask] .ctl .go{margin-left:auto}
+}
+
+.imgfit{flex:1;min-height:300px;display:flex;align-items:center;justify-content:center;padding:12px;background:var(--raised);overflow:auto}
+.imgfit img{max-width:100%;max-height:100%;object-fit:contain;border-radius:6px}
+@media (max-width:860px){ .mainc>.th h3{flex:1 1 auto;min-width:64px;font-size:15px} }
+@media (max-width:480px){
+  .mainc>.th .mchip{display:none}
+  .mainc>.th .btn[data-what=terminal]{display:none}
+  .uc-sub{display:none}
+}
+/* 제목은 줄 길이를 고르게 */
+h2,h3,h4,.uc-head h3{text-wrap:balance}
