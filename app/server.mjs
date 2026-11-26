@@ -235,6 +235,25 @@ function finish(id, code, err) {
   if (restartPending && !running.size) setTimeout(() => maybeRestart('기다리던 작업 끝남'), 1000);
 }
 
+// ── 예약해서 보내기: 허브가 켜져 있는 동안 30초마다 확인 ──
+// 정한 시각부터 1시간 안에만 보낸다(그보다 늦게 켜졌으면 그날은 건너뜀). 하루 한 번.
+function tickSchedules(now = new Date()) {
+  const ymd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const wd = now.getDay(); const mins = now.getHours() * 60 + now.getMinutes();
+  for (const t of allTasks()) {
+    const sc = t.schedule; if (!sc || !sc.on || !sc.text || !sc.time || t.runtime === 'aside') continue;
+    if (sc.days === 'weekdays' && (wd === 0 || wd === 6)) continue;
+    if (sc.lastDay === ymd) continue;
+    const [h, mi] = sc.time.split(':').map(Number); const at = h * 60 + mi;
+    if (mins < at || mins > at + 60) continue;
+    if (running.has(t.id)) continue; // 일하는 중이면 다음 확인 때
+    const cur = readTask(t.id); cur.schedule = { ...cur.schedule, lastDay: ymd, lastRun: now.toISOString() }; writeTask(cur);
+    try { console.log(`[예약] ${cur.title} · ${sc.time}`); send(cur, sc.text, { internal: true, show: `[예약 ${sc.time}] ${sc.text}` }); } catch (e) { console.error('[예약 실패]', e.message); }
+  }
+}
+setInterval(() => { try { tickSchedules(); } catch (e) { console.error('[예약]', e.message); } }, 30_000).unref();
+setTimeout(() => { try { tickSchedules(); } catch {} }, 5000).unref();
+
 // ── 내 직원(my/staff/<이름>/SKILL.md) ──
 function myStaff() {
   const dir = path.join(myDir(), 'staff'); const out = [];
@@ -254,7 +273,8 @@ function syncMyStaff(force) {
   const r = spawnSync(process.execPath, [path.join(REPO, 'tools', 'skills-sync.mjs')], { encoding: 'utf8', timeout: 60000, windowsHide: true, env: { ...process.env, AIHUB_HOME: hubHome() } });
   if (r.status !== 0) console.error('[내 직원] 스킬 다시 깔기 실패', (r.stderr || r.stdout || '').slice(-300));
 }
-setTimeout(() => { try { myStaffSig = myStaff().map((x) => x.skill + ':' + x.at).join('|'); } catch {} }, 0);
+// 켤 때: 다른 PC에서 옮겨 온 내 직원처럼 스킬 자리에 아직 없는 직원이 있으면 바로 깐다
+setTimeout(() => { try { const L = myStaff(); const miss = L.some((x) => !fs.existsSync(path.join(codexHome(), 'skills', x.skill, 'SKILL.md'))); if (miss) syncMyStaff(true); else myStaffSig = L.map((x) => x.skill + ':' + x.at).join('|'); } catch (e) { console.error('[내 직원]', e.message); } }, 0);
 
 // ── 고를 수 있는 모델 ──
 // 기본은 맨 위. Codex는 구독이 내려 준 목록(models_cache.json) 순서 그대로, Claude는 별칭.
@@ -853,6 +873,14 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/open-source') { try { return json(res, 200, JSON.parse(fs.readFileSync(path.join(REPO, 'skills', 'open-source.json'), 'utf8'))); } catch { return json(res, 200, []); } }
     if (p === '/api/staff') { let d; try { d = JSON.parse(fs.readFileSync(path.join(REPO, 'skills', 'staff.json'), 'utf8')); } catch { d = { staff: [] }; } d.mine = myStaff(); return json(res, 200, d); }
     if ((m = p.match(/^\/api\/tasks\/([\w-]+)\/continue$/)) && req.method === 'POST') { const t = readTask(m[1]); return json(res, 200, startContinue(t)); }
+    if ((m = p.match(/^\/api\/tasks\/([\w-]+)\/schedule$/)) && req.method === 'POST') {
+      const b = await body(req); const t = readTask(m[1]);
+      if (t.runtime === 'aside') return json(res, 400, { ok: false, msg: 'Aside 대화는 예약할 수 없어요' });
+      const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(b.time || '')) ? String(b.time) : null; const text = String(b.text || '').trim().slice(0, 2000);
+      if (b.on && (!time || !text)) return json(res, 400, { ok: false, msg: '시각과 보낼 말을 적어 주세요' });
+      t.schedule = { ...(t.schedule || {}), on: !!b.on, days: b.days === 'weekdays' ? 'weekdays' : 'daily', time: time || t.schedule?.time || '09:00', text: text || t.schedule?.text || '' };
+      writeTask(t); return json(res, 200, { ok: true, schedule: t.schedule });
+    }
     if ((m = p.match(/^\/api\/tasks\/([\w-]+)\/mark$/)) && req.method === 'POST') { const b = await body(req); const t = readTask(m[1]); const mk = ['good', 'redo'].includes(b.mark) ? b.mark : null; t.mark = mk ? { mark: mk, note: maskSecrets(String(b.note || '').slice(0, 200)).text, at: new Date().toISOString() } : null; writeTask(t); return json(res, 200, { ok: true, mark: t.mark }); }
     if ((m = p.match(/^\/api\/tasks\/([\w-]+)\/ctx-dismiss$/)) && req.method === 'POST') { const t = readTask(m[1]); t.ctxDismissed = true; writeTask(t); return json(res, 200, { ok: true }); }
     if ((m = p.match(/^\/files\/([\w-]+)\/(.+)$/))) { const t = readTask(m[1]); const f = path.resolve(t.cwd, m[2]); if (!f.startsWith(path.resolve(t.cwd))) { res.writeHead(403); return res.end(); } return serveFile(res, f); }

@@ -273,6 +273,19 @@ function chatHtml(t) {
   flush();
   return out.join('');
 }
+// 예약: 허브가 켜져 있을 때만 정해진 시각에 이 대화로 같은 말을 보낸다
+const DAYS = { daily: '매일', weekdays: '평일(월~금)' };
+const schedLabel = (sc) => sc && sc.on ? `${DAYS[sc.days] || '매일'} ${sc.time}` : '';
+function schedCard(t) {
+  if (t.runtime === 'aside') return '';
+  const sc = t.schedule || {};
+  return `<form class="card" data-form="sched"><h4>예약해서 보내기${sc.on ? `<span class="r"><span class="st work">켜짐 · ${esc(schedLabel(sc))}</span></span>` : ''}</h4>
+   <p class="md" style="margin-bottom:8px">정해 둔 시각에 이 대화로 아래 말을 보내요. 허브가 켜져 있을 때만 보내고, 그 시각에 꺼져 있었다면 1시간 안에 켜졌을 때만 보내요.</p>
+   <div class="ctl"><div class="field" style="min-height:32px"><select name="days" aria-label="요일">${Object.entries(DAYS).map(([k, v]) => `<option value="${k}" ${(sc.days || 'daily') === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div><div class="field" style="min-height:32px"><input type="time" name="time" value="${esc(sc.time || '09:00')}" aria-label="시각" required></div></div>
+   <div class="field area" style="margin-top:8px"><textarea name="text" rows="3" placeholder="예) 어제 올린 글 반응 정리하고 오늘 올릴 글 초안 하나 써줘" aria-label="보낼 말" required>${esc(sc.text || '')}</textarea></div>
+   ${sc.lastRun ? `<p class="crumb" style="margin-top:6px">마지막으로 보낸 때: ${new Date(sc.lastRun).toLocaleString('ko-KR')}</p>` : ''}
+   <div class="acts"><button class="btn pri" name="on" value="1">${sc.on ? '바꿔서 저장' : '예약 켜기'}</button>${sc.on ? '<button class="btn" name="on" value="0">예약 끄기</button>' : ''}</div></form>`;
+}
 const MARKS = { good: '잘 됐어요', redo: '다시 해야 해요' };
 function markBar(t) {
   if (t.status === 'working' || !t.messages.some((m) => m.role === 'ai')) return '';
@@ -283,7 +296,7 @@ function taskMain() {
   const t = S.task; const busy = t.status === 'working'; const pct = ctxPct(t);
   const band = pct != null && pct >= 50 && !t.continuedTo && !t.ctxDismissed && !busy ? `<div class="ctxband"><div><b>대화가 길어졌어요.</b> 더 길어지면 앞 내용을 흐리게 기억해요. 새 대화로 이어가면 지금 AI가 정리 카드를 쓰고, 같은 폴더의 새 대화가 그 카드부터 시작해요.</div><div class="acts" style="margin:0"><button class="btn dark" data-act="ctxgo">새 대화로 이어가기</button><button class="btn" data-act="ctxno">나중에</button></div></div>`
     : t.continuedTo ? `<div class="ctxband done"><div>이 대화는 새 대화로 이어졌어요.</div><button class="btn" data-act="open" data-id="${t.continuedTo}">이어진 대화 열기</button></div>` : '';
-  return `<div class="mainc"><div class="th"><button class="btn mob-only" data-act="pane" data-p="list" aria-label="목록으로">${ic('back', 's')}</button><span class="dot ${busy ? 'work' : 'idle'}"></span><h3>${esc(t.title)}</h3>${rtChip(t)}${ctxChip(t)}<span class="sp"></span>
+  return `<div class="mainc"><div class="th"><button class="btn mob-only" data-act="pane" data-p="list" aria-label="목록으로">${ic('back', 's')}</button><span class="dot ${busy ? 'work' : 'idle'}"></span><h3>${esc(t.title)}</h3>${rtChip(t)}${ctxChip(t)}${t.schedule?.on ? `<button type="button" class="chip mchip" data-act="stab" data-t="info" title="예약해서 보내기 켜짐">예약 ${esc(schedLabel(t.schedule))}</button>` : ''}<span class="sp"></span>
    <button class="btn" data-act="reveal" data-what="folder" title="${esc(t.cwd)}">${ic('folder', 's')}폴더 열기</button><button class="btn" data-act="reveal" data-what="terminal" title="터미널 열기" aria-label="터미널 열기">${ic('term', 's')}터미널 열기</button>
    <button class="btn mob-only" data-act="pane" data-p="side" aria-label="미리보기">${ic('eye', 's')}</button></div>${band}
    <div class="chat" id="chat">${chatHtml(t) || '<p class="empty">아래에 맡길 일을 적어 주세요. 허브에 있는 AI 직원(스킬)을 AI가 알아서 불러 써요.</p>'}${busy ? '<div class="typing">AI가 일하는 중이에요…</div>' : ''}</div>
@@ -303,7 +316,7 @@ function sidePanel() {
   } else if (S.sideTab === 'files') pane = `<div class="acts" style="padding:10px 16px;margin:0"><button class="btn" data-act="reveal" data-what="folder">${ic('folder', 's')}폴더 열기</button></div>` + (S.files.map((f) => `<button class="file" data-act="preview" data-name="${esc(f.name)}"><span class="fi">${ic('file')}</span><div><b>${esc(f.name)}</b><small>${Math.max(1, Math.round(f.size / 1024))}KB · ${ago(f.mtime)}</small></div></button>`).join('') || '<p class="empty" style="padding:16px">아직 결과물이 없어요.</p>');
   else pane = `<div style="padding:16px;display:flex;flex-direction:column;gap:12px"><div class="card"><h4>이 작업</h4><p class="md">작업 폴더: ${esc(base(t.cwd))}\n만든 때: ${new Date(t.created).toLocaleString('ko-KR')}\n맡긴 AI: ${rtName(t.runtime)}${(t.skillsUsed || []).length ? `\n쓴 스킬: ${esc(t.skillsUsed.join(', '))}` : ''}</p>
    <div class="acts"><button class="btn" data-act="reveal" data-what="folder">${ic('folder', 's')}폴더 열기</button><button class="btn" data-act="reveal" data-what="terminal">${ic('term', 's')}터미널 열기</button><button class="btn" data-act="rename">이름 바꾸기</button><button class="btn" data-act="delete">작업 지우기</button></div>
-   <p class="crumb" style="margin-top:8px">작업 지우기는 목록에서만 지워요. 폴더의 결과물은 그대로 남아요.</p></div></div>`;
+   <p class="crumb" style="margin-top:8px">작업 지우기는 목록에서만 지워요. 폴더의 결과물은 그대로 남아요.</p></div>${schedCard(t)}</div>`;
   return `<div class="side"><div class="stabs"><button class="mob-only" data-act="pane" data-p="chat" aria-label="대화로">${ic('back', 's')}</button><button class="${S.sideTab === 'preview' ? 'on' : ''}" data-act="stab" data-t="preview">미리보기</button><button class="${S.sideTab === 'files' ? 'on' : ''}" data-act="stab" data-t="files">결과물 ${S.files.length}</button><button class="${S.sideTab === 'card' ? 'on' : ''}" data-act="stab" data-t="card">정보</button></div><div class="spane">${pane}</div></div>`;
 }
 
@@ -569,6 +582,7 @@ document.addEventListener('submit', async (e) => {
       if (k === 'psend') await loadSplit(id); else await openTask(S.taskId, true);
       render();
     }
+    else if (k === 'sched') { const on = e.submitter?.value === '1'; const r = await api(`/api/tasks/${S.taskId}/schedule`, { method: 'POST', body: { on, days: d.days, time: d.time, text: d.text } }); S.task.schedule = r.schedule; await load(); toast(on ? `예약을 켰어요 · ${schedLabel(r.schedule)}` : '예약을 껐어요'); }
     else if (k === 'mark') { const mk = e.submitter?.value; if (!mk) return; const r = await api(`/api/tasks/${S.taskId}/mark`, { method: 'POST', body: { mark: mk, note: d.note || '' } }); S.task.mark = r.mark; S.markEdit = false; await load(); toast(mk === 'good' ? '잘 됐다고 남겼어요' : '다시 해야 한다고 남겼어요'); }
     else if (k === 'url') { let u = d.u.trim(); if (!u) return; if (!/^(https?:|\/)/.test(u)) u = /\.\w{1,5}$/.test(u) && !/^www\./.test(u) && S.files.some((x) => x.name === u) ? fileUrl(u) : 'https://' + u; await setPreview(u); render(); }
     else if (k === 'me') { await api('/api/me', { method: 'POST', body: d }); await load(); const a = S.st.auth; if (a && !a.codex && !a.claude) { S.view = 'settings'; S.setTab = 'ai'; S.pane = 'page'; render(); loadSetTab(); toast('먼저 AI 로그인을 해 주세요'); } else toast('오늘 탭의 새로 맡기기에서 첫 일을 맡겨 보세요'); }
