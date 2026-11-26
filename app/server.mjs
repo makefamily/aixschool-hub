@@ -101,6 +101,7 @@ function skillLabel(name) {
   try { staffCache ||= JSON.parse(fs.readFileSync(path.join(REPO, 'skills', 'staff.json'), 'utf8')); } catch { staffCache = { staff: [] }; }
   const s = (staffCache.staff || []).find((x) => x.skill === name);
   if (s) return `${s.name} (${name})`;
+  try { const mine = myStaff().find((x) => x.skill === name); if (mine) return `내 직원 ${mine.name} (${name})`; } catch {}
   try { const m = JSON.parse(fs.readFileSync(path.join(REPO, 'skills', 'manifest.json'), 'utf8')).skills.find((x) => x.name === name); if (m) return `${m.desc} (${name})`; } catch {}
   return name;
 }
@@ -229,9 +230,31 @@ function finish(id, code, err) {
   else { writeTask(t); if (t.runtime === 'codex' && !t.codexPersonal && codexStale()) { clearCodexStale(); refreshAuth(true); } }
   emit({ type: 'status', task: id, status: t.status });
   usageCache.codex.at = 0; // 다음 조회 때 남은 양 새로 읽기
+  try { syncMyStaff(); } catch (e) { console.error('[내 직원]', e.message); }
   const fn = afterTurn.get(id); if (fn) { afterTurn.delete(id); try { fn(code); } catch (e) { console.error('[이어가기 오류]', e); } }
   if (restartPending && !running.size) setTimeout(() => maybeRestart('기다리던 작업 끝남'), 1000);
 }
+
+// ── 내 직원(my/staff/<이름>/SKILL.md) ──
+function myStaff() {
+  const dir = path.join(myDir(), 'staff'); const out = [];
+  let names = []; try { names = fs.readdirSync(dir); } catch { return out; }
+  for (const n of names) {
+    const f = path.join(dir, n, 'SKILL.md'); let t; try { t = fs.readFileSync(f, 'utf8'); } catch { continue; }
+    const fm = (t.match(/^---\s*\n([\s\S]*?)\n---/) || [])[1] || '';
+    const get = (k) => ((fm.match(new RegExp(`^${k}:\\s*(.+)$`, 'm')) || [])[1] || '').replace(/^["']|["']$/g, '').trim();
+    out.push({ name: get('title') || n, skill: get('name') || n, role: get('description'), mine: true, at: fs.statSync(f).mtimeMs });
+  }
+  return out.sort((a, b) => a.at - b.at);
+}
+let myStaffSig = '';
+function syncMyStaff(force) {
+  const sig = myStaff().map((x) => x.skill + ':' + x.at).join('|');
+  if (!force && sig === myStaffSig) return; myStaffSig = sig;
+  const r = spawnSync(process.execPath, [path.join(REPO, 'tools', 'skills-sync.mjs')], { encoding: 'utf8', timeout: 60000, windowsHide: true, env: { ...process.env, AIHUB_HOME: hubHome() } });
+  if (r.status !== 0) console.error('[내 직원] 스킬 다시 깔기 실패', (r.stderr || r.stdout || '').slice(-300));
+}
+setTimeout(() => { try { myStaffSig = myStaff().map((x) => x.skill + ':' + x.at).join('|'); } catch {} }, 0);
 
 // ── 고를 수 있는 모델 ──
 // 기본은 맨 위. Codex는 구독이 내려 준 목록(models_cache.json) 순서 그대로, Claude는 별칭.
@@ -828,8 +851,9 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true, task: t.id });
     }
     if (p === '/api/open-source') { try { return json(res, 200, JSON.parse(fs.readFileSync(path.join(REPO, 'skills', 'open-source.json'), 'utf8'))); } catch { return json(res, 200, []); } }
-    if (p === '/api/staff') { try { return json(res, 200, JSON.parse(fs.readFileSync(path.join(REPO, 'skills', 'staff.json'), 'utf8'))); } catch { return json(res, 200, { staff: [] }); } }
+    if (p === '/api/staff') { let d; try { d = JSON.parse(fs.readFileSync(path.join(REPO, 'skills', 'staff.json'), 'utf8')); } catch { d = { staff: [] }; } d.mine = myStaff(); return json(res, 200, d); }
     if ((m = p.match(/^\/api\/tasks\/([\w-]+)\/continue$/)) && req.method === 'POST') { const t = readTask(m[1]); return json(res, 200, startContinue(t)); }
+    if ((m = p.match(/^\/api\/tasks\/([\w-]+)\/mark$/)) && req.method === 'POST') { const b = await body(req); const t = readTask(m[1]); const mk = ['good', 'redo'].includes(b.mark) ? b.mark : null; t.mark = mk ? { mark: mk, note: maskSecrets(String(b.note || '').slice(0, 200)).text, at: new Date().toISOString() } : null; writeTask(t); return json(res, 200, { ok: true, mark: t.mark }); }
     if ((m = p.match(/^\/api\/tasks\/([\w-]+)\/ctx-dismiss$/)) && req.method === 'POST') { const t = readTask(m[1]); t.ctxDismissed = true; writeTask(t); return json(res, 200, { ok: true }); }
     if ((m = p.match(/^\/files\/([\w-]+)\/(.+)$/))) { const t = readTask(m[1]); const f = path.resolve(t.cwd, m[2]); if (!f.startsWith(path.resolve(t.cwd))) { res.writeHead(403); return res.end(); } return serveFile(res, f); }
     if (p === '/api/client-log' && req.method === 'GET') { console.log('[미리보기]', String(url.searchParams.get('m') || '').slice(0, 400)); res.writeHead(204); return res.end(); }

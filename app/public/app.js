@@ -102,6 +102,7 @@ function md(src) {
 async function load() { S.st = await api('/api/state'); api('/api/my').then((m) => { S.my = m; if (S.view === 'today') render(); }).catch(() => {}); if (S.taskId) await openTask(S.taskId, true); render(); }
 async function loadUsage() { try { S.usage = await api('/api/usage'); renderSB(); } catch {} }
 async function openTask(id, quiet) {
+  if (S.taskId !== id) S.markEdit = false;
   S.taskId = id; S.task = await api(`/api/tasks/${id}`);
   S.files = await api(`/api/tasks/${id}/files`).catch(() => []);
   if (!S.previewSrc || !(S.previewSrc.startsWith(`/files/${id}/`) || S.previewSrc.startsWith(`/api/tasks/${id}/img/`))) { const h = S.files.find((f) => /\.html?$/i.test(f.name)) || S.files.find((f) => /\.(png|jpe?g|webp|gif|svg|pdf|md|txt)$/i.test(f.name)); setPreview(h ? fileUrl(h.name) : ''); }
@@ -212,12 +213,15 @@ function searchBox() {
 function weekKey(iso) { const d = new Date(iso || 0); const now = new Date(); const day = (x) => Math.floor((x - new Date(x.getFullYear(), 0, 1)) / 864e5); const diff = Math.floor((now - d) / 864e5); if (diff < 1 && now.getDate() === d.getDate()) return '오늘'; if (diff < 7) return '이번 주'; if (diff < 14) return '지난주'; return `${d.getMonth() + 1}월`; }
 function workView() {
   const list = S.st.tasks;
-  const groups = []; for (const t of list) { const k = t.status === 'working' ? 'AI가 하는 중' : weekKey(t.updated); let g = groups.find((x) => x.k === k); if (!g) groups.push((g = { k, items: [] })); g.items.push(t); }
-  groups.sort((a, b) => (a.k === 'AI가 하는 중' ? -1 : b.k === 'AI가 하는 중' ? 1 : 0));
-  const row = (t) => `<button class="row ${(S.split ? S.splitIds.includes(t.id) : t.id === S.taskId) ? 'on' : ''}" data-act="open" data-id="${t.id}"><span class="dot ${t.status === 'working' ? 'work' : t.status === 'error' ? 'err' : 'idle'}" style="margin-top:8px"></span><div style="min-width:0"><div class="t">${esc(t.title)}</div><div class="m">${rtName(t.runtime)} · ${ago(t.updated)}</div></div></button>`;
+  // 날짜순(기본) 또는 폴더별: 실제 프로젝트 폴더에서 한 일은 폴더 이름으로, 허브가 만든 새 폴더는 한 묶음으로
+  const keyOf = (t) => t.status === 'working' ? 'AI가 하는 중' : S.byFolder ? (t.picked ? (base(t.cwd) === 'my' && /AISchoolHub[\\/]my$/.test(t.cwd) ? '내 자료 폴더' : base(t.cwd)) : '허브가 만든 새 폴더') : weekKey(t.updated);
+  const groups = []; for (const t of list) { const k = keyOf(t); let g = groups.find((x) => x.k === k); if (!g) groups.push((g = { k, items: [] })); g.items.push(t); }
+  groups.sort((a, b) => (a.k === 'AI가 하는 중' ? -1 : b.k === 'AI가 하는 중' ? 1 : S.byFolder ? (a.k === '허브가 만든 새 폴더') - (b.k === '허브가 만든 새 폴더') : 0));
+  const row = (t) => `<button class="row ${(S.split ? S.splitIds.includes(t.id) : t.id === S.taskId) ? 'on' : ''}" data-act="open" data-id="${t.id}"><span class="dot ${t.status === 'working' ? 'work' : t.status === 'error' ? 'err' : 'idle'}" style="margin-top:8px"></span><div style="min-width:0"><div class="t">${esc(t.title)}</div><div class="m">${rtName(t.runtime)} · ${ago(t.updated)}${t.mark ? ` · <span class="mk ${t.mark.mark}">${MARKS[t.mark.mark]}</span>` : ''}</div></div></button>`;
   const rail = `<div class="rail"><div class="lbl" style="display:flex;align-items:center">내 작업<span class="sp" style="flex:1"></span><button class="btn ${S.split ? 'dark' : ''}" data-act="split" title="대화 여러 개를 한 화면에 나란히 봐요">${ic('layers', 's')}${S.split ? '나란히 보기 끄기' : '나란히 보기'}</button></div>${S.split ? '<p class="crumb" style="margin:-4px 0 0">작업을 누르면 오른쪽 칸에 들어가요. 최대 4개까지요.</p>' : ''}${searchBox()}
    <details ${list.length ? '' : 'open'}><summary class="lbl" style="cursor:pointer">${ic('plus', 's')}새 작업</summary>${newTaskForm('work')}</details>
-   ${groups.map((g) => `<div><div class="lbl">${g.k}</div>${g.items.map(row).join('')}</div>`).join('')}
+   ${list.length ? `<div class="seg2" role="group" aria-label="목록 보기"><button class="${S.byFolder ? '' : 'on'}" data-act="byfolder" data-v="0" aria-pressed="${!S.byFolder}">날짜순</button><button class="${S.byFolder ? 'on' : ''}" data-act="byfolder" data-v="1" aria-pressed="${!!S.byFolder}">폴더별</button></div>` : ''}
+   ${groups.map((g) => `<div><div class="lbl">${S.byFolder && g.k !== 'AI가 하는 중' ? ic('folder', 's') : ''}${esc(g.k)} <span class="num" style="font-weight:400">${g.items.length}</span></div>${g.items.map(row).join('')}</div>`).join('')}
    ${!list.length ? '<p class="empty">아직 작업이 없어요. 위 새 작업에서 맡겨 보세요.</p>' : ''}</div>`;
   if (S.split) return `<div class="body split" data-pane="${S.pane === 'list' ? 'list' : 'chat'}">${rail}${splitHtml()}</div>`;
   return `<div class="body ${S.wide ? 'wide' : ''}" data-pane="${S.pane}" style="${S.sideW ? `--side-w:${S.sideW}px` : ''}">${rail}${S.task ? taskMain() + `<div class="resizer" data-drag="side" title="끌어서 미리보기 폭 바꾸기"></div>` + sidePanel() : `<div class="mainc"><div class="page" style="background:var(--card)"><p class="empty">왼쪽에서 작업을 고르거나 새로 맡기세요.</p></div></div>`}</div>`;
@@ -269,6 +273,12 @@ function chatHtml(t) {
   flush();
   return out.join('');
 }
+const MARKS = { good: '잘 됐어요', redo: '다시 해야 해요' };
+function markBar(t) {
+  if (t.status === 'working' || !t.messages.some((m) => m.role === 'ai')) return '';
+  if (t.mark && !S.markEdit) return `<div class="markbar done"><span class="st ${t.mark.mark === 'good' ? 'work' : 'wait'}">${MARKS[t.mark.mark]}</span>${t.mark.note ? `<span class="mnote">${esc(t.mark.note)}</span>` : ''}<span class="sp"></span><button class="linkbtn" data-act="markedit">바꾸기</button></div>`;
+  return `<form class="markbar" data-form="mark"><span class="mq">이번 결과 어땠어요?</span><button type="submit" class="btn sm" name="mark" value="good">잘 됐어요</button><button type="submit" class="btn sm" name="mark" value="redo">다시 해야 해요</button><div class="field mfield"><input name="note" maxlength="200" placeholder="한 줄 메모 (선택) · 무엇이 좋았나, 무엇이 아쉬웠나" aria-label="한 줄 메모" value="${esc(t.mark?.note || '')}"></div></form>`;
+}
 function taskMain() {
   const t = S.task; const busy = t.status === 'working'; const pct = ctxPct(t);
   const band = pct != null && pct >= 50 && !t.continuedTo && !t.ctxDismissed && !busy ? `<div class="ctxband"><div><b>대화가 길어졌어요.</b> 더 길어지면 앞 내용을 흐리게 기억해요. 새 대화로 이어가면 지금 AI가 정리 카드를 쓰고, 같은 폴더의 새 대화가 그 카드부터 시작해요.</div><div class="acts" style="margin:0"><button class="btn dark" data-act="ctxgo">새 대화로 이어가기</button><button class="btn" data-act="ctxno">나중에</button></div></div>`
@@ -277,6 +287,7 @@ function taskMain() {
    <button class="btn" data-act="reveal" data-what="folder" title="${esc(t.cwd)}">${ic('folder', 's')}폴더 열기</button><button class="btn" data-act="reveal" data-what="terminal" title="터미널 열기" aria-label="터미널 열기">${ic('term', 's')}터미널 열기</button>
    <button class="btn mob-only" data-act="pane" data-p="side" aria-label="미리보기">${ic('eye', 's')}</button></div>${band}
    <div class="chat" id="chat">${chatHtml(t) || '<p class="empty">아래에 맡길 일을 적어 주세요. 허브에 있는 AI 직원(스킬)을 AI가 알아서 불러 써요.</p>'}${busy ? '<div class="typing">AI가 일하는 중이에요…</div>' : ''}</div>
+   ${markBar(t)}
    <div class="comp"><form class="box" data-form="send">${attStrip('send-' + t.id)}<textarea name="text" aria-label="메시지" placeholder="이어서 할 말 · Enter로 보내기, Shift+Enter 줄바꿈 · 캡처는 붙여 넣기" ${busy ? 'disabled' : ''}></textarea>
    <div class="ctl">${busy ? '' : attBtn('send-' + t.id)}<span class="crumb">${t.picked ? esc(base(t.cwd)) + ' 폴더에서 작업' : ''}</span><span class="sp"></span>${busy ? `<button type="button" class="btn" data-act="stop">${ic('stop', 's')}멈추기</button>` : `<button class="send" aria-label="보내기">${ic('up')}</button>`}</div></form></div></div>`;
 }
@@ -310,6 +321,8 @@ function staffView() {
   return `<div class="page"><h2>AI 직원 ${main.length}명</h2><p class="lead">허브에 들어 있는 AI 직원이에요. 일을 맡기면 AI가 알맞은 직원을 알아서 불러요. 직원 이름을 직접 말해도 돼요. 쓰면서 내 일에 맞게 고쳐 가면 내 직원이 돼요.</p>
   ${chief ? `<div class="card chief"><h4>${esc(chief.name)}<span class="r">총괄</span></h4><p>${esc(chief.role)}</p><p class="q">이렇게 말해 보세요 · “${esc(chief.example)}”</p><div class="acts"><button class="btn pri" data-act="hire" data-name="${esc(chief.name)}">총괄 비서에게 맡기기</button></div></div>` : ''}
   ${stages.length ? stages.map(stageHtml).join('') : teams.map((tm) => `<div class="teamhead">${esc(tm)}</div><div class="staffgrid">${main.filter((s) => (s.team || '') === tm).map(card).join('')}</div>`).join('') || '<p class="empty">직원 목록을 못 읽었어요.</p>'}
+  <div class="stagehead sub"><div class="rhead"><h3>내 직원 <span class="num">${(st.mine || []).length}명</span></h3><span class="sp"></span><button class="btn pri" data-act="makestaff">${ic('plus', 's')}직원 만들기</button></div><p>내 일에 맞는 직원을 AI와 대화로 만들어요. 만든 직원은 여기에 뜨고 바로 부를 수 있어요.</p></div>
+  ${(st.mine || []).length ? `<div class="staffgrid">${st.mine.map(card).join('')}</div>` : '<p class="empty" style="padding:4px 0 8px">아직 만든 직원이 없어요.</p>'}
   ${helpers.length ? `<details class="card" style="margin-top:16px"><summary><b>뒤에서 돕는 직원 ${helpers.length}명</b> <span class="crumb">직접 부를 일은 적고, AI가 만들고 점검할 때 알아서 써요</span></summary><div class="staffgrid" style="margin-top:12px">${helpers.map(card).join('')}</div></details>` : ''}
   ${(S.oss || []).length ? `<details class="card" style="margin-top:16px"><summary><b>같이 쓰면 좋은 오픈소스 ${S.oss.length}개</b> <span class="crumb">대표가 실제로 써 온 무료 도구예요. AI에게 말하면 확인을 받고 깔아서 써요</span></summary><div class="staffgrid" style="margin-top:12px">${S.oss.map((o) => `<div class="card staff"><h4>${esc(o.name)}<span class="r">${esc(o.area || '')}</span></h4><p>${esc(o.what || '')}</p>${o.license ? `<p class="crumb">라이선스: ${esc(o.license)}${o.note ? ' · ' + esc(o.note) : ''}</p>` : ''}<div class="acts">${o.say ? `<button class="btn" data-act="osshire" data-name="${esc(o.name)}">이걸로 맡기기</button>` : ''}${o.url ? `<a class="btn" href="#" data-act="openurl" data-url="${esc(o.url)}">사이트</a>` : ''}</div></div>`).join('')}</div></details>` : ''}</div>`;
 }
@@ -494,6 +507,9 @@ document.addEventListener('click', async (e) => {
     else if (a === 'revealroot') await reveal(b.dataset.what, true);
     else if (a === 'rename') { const v = prompt('새 작업 이름', S.task.title); if (v && v.trim()) { await api(`/api/tasks/${S.taskId}/rename`, { method: 'POST', body: { title: v } }); await load(); } }
     else if (a === 'delete') { if (!confirm(`'${S.task.title}' 작업을 목록에서 지울까요? 폴더의 결과물은 남아요.`)) return; await api(`/api/tasks/${S.taskId}/delete`, { method: 'POST' }); S.task = null; S.taskId = null; S.pane = 'list'; await load(); toast('목록에서 지웠어요'); }
+    else if (a === 'byfolder') { S.byFolder = b.dataset.v === '1'; try { localStorage.setItem('byFolder', S.byFolder ? '1' : ''); } catch {} render(); }
+    else if (a === 'markedit') { S.markEdit = true; render(); }
+    else if (a === 'makestaff') { S.view = 'today'; S.prefill = { where: 'today', title: '새 직원 만들기', text: '내 일에 맞는 AI 직원을 하나 만들고 싶어.\n맡기고 싶은 일: (여기에 적기)\n주로 넣어 줄 것: (메모, 사진, 엑셀 등)\n받고 싶은 결과: (글, 이미지, 표 등)' }; render(); setTimeout(() => { const ta = $('[data-form=newtask][data-where=today] textarea'); if (ta) { ta.focus(); const i = ta.value.indexOf('('); if (i > 0) ta.setSelectionRange(i, ta.value.indexOf(')', i) + 1); } }, 30); }
     else if (a === 'hire') { const s = (S.staff?.staff || []).find((x) => x.name === b.dataset.name); S.view = 'today'; S.prefill = { where: 'today', title: s ? `${s.name} · ${s.example}`.slice(0, 40) : '', text: s ? `${s.name}에게 맡길게. ${s.example}` : '' }; render(); setTimeout(() => { const ta = $('[data-form=newtask][data-where=today] textarea'); if (ta) { ta.focus(); ta.select(); } }, 30); }
     else if (a === 'myinterview') { const r = await api('/api/my/interview', { method: 'POST' }); await load(); await openTask(r.task); }
     else if (a === 'myreveal') { const r = await api('/api/my/reveal', { method: 'POST' }); if (!r.ok) toast(r.msg || '열지 못했어요'); }
@@ -536,6 +552,7 @@ document.addEventListener('pointerdown', (e) => {
   addEventListener('pointermove', move); addEventListener('pointerup', up);
 });
 try { const w = Number(localStorage.getItem('sideW')); if (w) S.sideW = w; } catch {}
+try { S.byFolder = localStorage.getItem('byFolder') === '1'; } catch {}
 document.addEventListener('submit', async (e) => {
   e.preventDefault(); const f = e.target; const d = Object.fromEntries(new FormData(f)); const k = f.dataset.form;
   try {
@@ -552,6 +569,7 @@ document.addEventListener('submit', async (e) => {
       if (k === 'psend') await loadSplit(id); else await openTask(S.taskId, true);
       render();
     }
+    else if (k === 'mark') { const mk = e.submitter?.value; if (!mk) return; const r = await api(`/api/tasks/${S.taskId}/mark`, { method: 'POST', body: { mark: mk, note: d.note || '' } }); S.task.mark = r.mark; S.markEdit = false; await load(); toast(mk === 'good' ? '잘 됐다고 남겼어요' : '다시 해야 한다고 남겼어요'); }
     else if (k === 'url') { let u = d.u.trim(); if (!u) return; if (!/^(https?:|\/)/.test(u)) u = /\.\w{1,5}$/.test(u) && !/^www\./.test(u) && S.files.some((x) => x.name === u) ? fileUrl(u) : 'https://' + u; await setPreview(u); render(); }
     else if (k === 'me') { await api('/api/me', { method: 'POST', body: d }); await load(); const a = S.st.auth; if (a && !a.codex && !a.claude) { S.view = 'settings'; S.setTab = 'ai'; S.pane = 'page'; render(); loadSetTab(); toast('먼저 AI 로그인을 해 주세요'); } else toast('오늘 탭의 새로 맡기기에서 첫 일을 맡겨 보세요'); }
     else if (k === 'authcode') { if (!d.code.trim()) return toast('코드를 붙여 넣어 주세요'); const r = await api(`/api/auth/${f.dataset.who}/code`, { method: 'POST', body: { code: d.code } }); toast(r.msg); }

@@ -373,3 +373,13 @@ details.more{margin-top:6px}details.more>summary{min-height:24px;padding:2px 0;f
 .stagehead.sub{margin-top:32px}.stagehead.sub h3{font-size:14px}
 .card.staff h4 .ord{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;border-radius:6px;background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:600;margin-right:8px;padding:0 5px}
 .card.staff h4 .r{font-size:12px;color:var(--ink3);font-weight:400}
+/* 성공·실패 표시 */
+.markbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 24px;padding:8px 12px;border:1px solid var(--line);border-radius:var(--r-ctl);background:var(--card);font-size:13px;color:var(--ink2)}
+.markbar .mq{color:var(--ink2)}.markbar .mfield{flex:1 1 220px;min-height:30px}.markbar .mnote{color:var(--ink2);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mk{font-weight:500}.mk.good{color:#1a7f55}.mk.redo{color:#b86e00}
+@media (max-width:860px){.markbar{margin:0 12px}}
+/* 목록 보기 전환 */
+.seg2{display:inline-flex;border:1px solid var(--line);border-radius:var(--r-ctl);overflow:hidden;margin:4px 0 2px}
+.seg2 button{height:26px;padding:0 10px;font-size:12px;color:var(--ink3);background:var(--card)}
+.seg2 button.on{background:var(--raised);color:var(--ink);font-weight:500}
+.seg2 button+button{border-left:1px solid var(--line)}
