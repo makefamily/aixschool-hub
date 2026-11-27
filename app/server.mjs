@@ -20,6 +20,9 @@ for (const k of Object.keys(process.env)) if (/^(CLAUDECODE|CLAUDE_CODE_|ORCA_)/
 for (const k of ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'CODEX_API_KEY']) delete process.env[k];
 // 앱을 Finder·시작 메뉴로 열면 PATH가 짧다. 서버를 켠 Node의 폴더를 넣어 둬야 Node로 도는 프로그램(codex 등)이 Node를 찾는다.
 { const d = path.dirname(process.execPath); const cur = (process.env.PATH || '').split(path.delimiter); if (!cur.includes(d)) process.env.PATH = [d, ...cur].filter(Boolean).join(path.delimiter); }
+// 예상 못 한 오류 하나로 서버 전체가 꺼지면 창에 '127.0.0.1 연결 거부'만 남는다 → 기록만 남기고 계속 돈다(2026-11-27)
+process.on('uncaughtException', (e) => { try { console.error('[AI 학교 허브] 처리 못 한 오류(서버는 계속 돔)', e?.stack || e); } catch {} });
+process.on('unhandledRejection', (e) => { try { console.error('[AI 학교 허브] 처리 못 한 오류(서버는 계속 돔)', e?.stack || e); } catch {} });
 const PORT = Number(process.env.AIHUB_PORT || 7710);
 const PUB = path.join(REPO, 'app', 'public');
 const TASKS = path.join(hubHome(), 'tasks');
@@ -957,21 +960,45 @@ const server = http.createServer(async (req, res) => {
   } catch (e) { console.error(`[오류] ${req.method} ${p} · ${e.stack || e}`); json(res, 500, { ok: false, msg: String(e.message || e) }); }
 });
 // 업데이트 뒤 새 코드로 다시 켜기: 새 서버를 따로 띄우고 지금 서버는 끝낸다.
-// 새 서버는 앱이 직접 켠 것이 아니라서, 화면 연결이 1분 넘게 없으면 스스로 꺼진다(앱을 닫으면 같이 끝나게).
+// 새 서버는 앱이 직접 켠 것이 아니라서, 앱(창 프로그램)이 꺼진 것을 확인했을 때만 스스로 꺼진다.
+// 예전에는 '화면 연결이 1분 없으면' 꺼졌는데, 절전·와이파이 변경으로 연결이 잠깐 끊겨도 서버가 꺼져
+// 창에 '127.0.0.1 연결 거부'가 남았다(2026-11-27). 앱이 살아 있는 동안은 서버를 끄지 않는다.
 let updating = null;
+// 앱 프로세스 번호: 앱이 직접 켠 서버면 부모가 앱이다. 다시 켠 서버는 물려받은 번호를 쓴다.
+const APP_PID = process.env.AIHUB_IDLE_EXIT ? Number(process.env.AIHUB_APP_PID) || 0 : process.ppid;
+const APP_EXE = 'aixschool-hub';
+function appAlive() {
+  if (APP_PID) { try { process.kill(APP_PID, 0); return true; } catch (e) { if (e.code === 'EPERM') return true; } }
+  // 번호를 모르거나(예전 판이 다시 켠 서버) 그 앱이 꺼졌으면 이름으로 찾는다. 앱을 닫았다 바로 다시 켜면 새 앱이 이 서버를 이어 쓰기 때문.
+  // 확인 자체가 안 되면 살아 있다고 본다(서버가 남는 편이 낫다).
+  try {
+    if (PLATFORM === 'windows') {
+      const r = spawnSync('tasklist', ['/FI', `IMAGENAME eq ${APP_EXE}.exe`, '/NH'], { windowsHide: true, encoding: 'utf8', timeout: 10000 });
+      if (r.status !== 0 || r.error) return true;
+      return r.stdout.toLowerCase().includes(`${APP_EXE}.exe`);
+    }
+    const r = spawnSync('pgrep', ['-x', APP_EXE], { timeout: 10000 });
+    return r.status === 1 ? false : true;
+  } catch { return true; }
+}
 function restartSelf() {
   const log = fs.openSync(path.join(hubHome(), 'hub.log'), 'a');
-  const c = spawn(process.execPath, [path.join(REPO, 'app', 'server.mjs')], { cwd: REPO, env: { ...process.env, AIHUB_HOME: hubHome(), AIHUB_IDLE_EXIT: '1' }, detached: true, stdio: ['ignore', log, log], windowsHide: true });
+  const c = spawn(process.execPath, [path.join(REPO, 'app', 'server.mjs')], { cwd: REPO, env: { ...process.env, AIHUB_HOME: hubHome(), AIHUB_IDLE_EXIT: '1', AIHUB_APP_PID: APP_PID ? String(APP_PID) : '' }, detached: true, stdio: ['ignore', log, log], windowsHide: true });
   c.unref();
   server.close(); for (const r of clients) { try { r.end(); } catch {} }
   setTimeout(() => process.exit(0), 300);
 }
 if (process.env.AIHUB_IDLE_EXIT) {
-  let idle = 0;
-  setInterval(() => { idle = clients.size || running.size || updating ? 0 : idle + 15; if (idle >= 60) { console.log('[AI 학교 허브] 화면이 닫혀 서버를 끝냄'); process.exit(0); } }, 15000).unref();
+  setInterval(() => { if (running.size || updating || appAlive()) return; console.log('[AI 학교 허브] 앱이 닫혀 서버를 끝냄'); process.exit(0); }, 15000).unref();
 }
 let listenTries = 0;
-server.on('error', (e) => { if (e.code === 'EADDRINUSE' && listenTries++ < 40) return setTimeout(() => server.listen(PORT, '127.0.0.1'), 500); console.error('[AI 학교 허브] 서버를 열지 못함', e); process.exit(1); });
+server.on('error', (e) => {
+  if (e.code === 'EADDRINUSE' && listenTries++ < 40) return setTimeout(() => server.listen(PORT, '127.0.0.1'), 500);
+  console.error('[AI 학교 허브] 서버를 열지 못함', e);
+  if (e.code === 'EACCES') console.error(`[AI 학교 허브] 윈도우가 ${PORT}번 포트를 쓰지 못하게 막아 둠(Hyper-V·WSL·Docker 예약 포트일 가능성). PC를 다시 시작하면 풀리는 경우가 많음`);
+  else if (e.code === 'EADDRINUSE') console.error(`[AI 학교 허브] ${PORT}번 포트를 다른 프로그램이 20초 넘게 쓰고 있음. 작업 관리자에서 남은 Node.js를 끝내고 다시 켜기`);
+  process.exit(1);
+});
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`[AI 학교 허브] v${upd.currentVersion()} 실행 · http://127.0.0.1:${PORT} · 허브 폴더 ${hubHome()} · pid ${process.pid}`);
   try { const pc = pcCheck(); console.log(`[이 PC] 사용자 폴더 ${pc.home}${pc.oddHome ? ' (띄어쓰기·한글 있음 → AI를 직접 실행)' : ''} · Claude ${pc.claude.how} ${pc.claude.path} · Codex ${pc.codex.how}`); } catch {}
