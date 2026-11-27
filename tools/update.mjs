@@ -3,7 +3,7 @@
 // 앱을 열었을 때만 확인한다(자동 실행·예약 작업 없음).
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { REPO, PLATFORM, hubHome } from './lib.mjs';
 
 const FEED = process.env.AIHUB_UPDATE_FEED || 'https://api.github.com/repos/makefamily/aixschool-hub/releases/latest';
@@ -95,4 +95,100 @@ export async function apply(step = () => {}) {
   fs.rmSync(x, { recursive: true, force: true });
   cache = { at: 0, data: null };
   return info.latest;
+}
+
+// ── 앱 껍데기(창 프로그램) 바꾸기 ─────────────────────────────
+// 허브 업데이트는 hub 폴더만 바꾼다. 껍데기가 이 판보다 낮으면 같은 판 묶음을 다시 받아 껍데기만 새로 깐다.
+// 업데이트 직후 한 번만(판마다 한 번) 시도한다. 실패해도 허브는 옛 껍데기로 그대로 돈다.
+// 이 값은 desktop/src-tauri/tauri.conf.json 의 version 과 같아야 한다(build-release 가 확인).
+export const SHELL_VERSION = '0.3.0';
+const APP_DIR_NAME = 'AI 학교 허브';
+export function shellNeeded() {
+  return newer(SHELL_VERSION, process.env.AIHUB_SHELL_VERSION || '0.2.0');
+}
+export async function shellUpdate(log = console.log) {
+  if (!shellNeeded()) return 'skip';
+  const mark = path.join(hubHome(), 'shell-update.json');
+  try { if (JSON.parse(fs.readFileSync(mark, 'utf8')).ver === SHELL_VERSION) return 'tried'; } catch {}
+  fs.writeFileSync(mark, JSON.stringify({ ver: SHELL_VERSION, from: process.env.AIHUB_SHELL_VERSION || '0.2.0', at: new Date().toISOString() }));
+  const ver = currentVersion();
+  if (ver === 'dev') return 'dev';
+  const work = path.join(hubHome(), 'update', 'shell');
+  fs.rmSync(work, { recursive: true, force: true });
+  fs.mkdirSync(work, { recursive: true });
+  const url = process.env.AIHUB_SHELL_BUNDLE || `https://github.com/makefamily/aixschool-hub/releases/download/v${ver}/${ASSET}`;
+  log(`[앱 업데이트] 앱 ${process.env.AIHUB_SHELL_VERSION || '0.2.0'} → ${SHELL_VERSION}, 묶음 받는 중`);
+  let zip = url;
+  if (/^https?:/.test(url)) {
+    const r = await fetch(url, { headers: { 'user-agent': 'aixschool-hub' }, signal: AbortSignal.timeout(300000) });
+    if (!r.ok) throw new Error(`묶음을 받지 못함(HTTP ${r.status})`);
+    zip = path.join(work, 'bundle.zip');
+    fs.writeFileSync(zip, Buffer.from(await r.arrayBuffer()));
+  }
+  const x = path.join(work, 'x');
+  const u = PLATFORM === 'windows'
+    ? spawnSync('powershell', ['-NoProfile', '-Command', `Expand-Archive -LiteralPath '${zip}' -DestinationPath '${x}' -Force`], { encoding: 'utf8', windowsHide: true })
+    : spawnSync('ditto', ['-x', '-k', zip, x], { encoding: 'utf8' });
+  if (u.status !== 0) throw new Error(`압축을 풀지 못함 ${(u.stderr || '').slice(0, 200)}`);
+  const inst = path.join(x, 'AISchoolHub-install');
+  const hubLog = path.join(hubHome(), 'hub.log');
+  if (PLATFORM === 'windows') {
+    const exe = fs.readdirSync(inst).find((f) => /setup.*\.exe$/i.test(f));
+    if (!exe) throw new Error('묶음에 앱 설치 파일이 없음');
+    const m = exe.match(/_(\d+\.\d+\.\d+)_/);
+    if (m && m[1] !== SHELL_VERSION) throw new Error(`묶음의 앱 판(${m[1]})이 기대(${SHELL_VERSION})와 다름`);
+    const setup = path.join(work, 'shell-setup.exe');
+    fs.copyFileSync(path.join(inst, exe), setup);
+    const known = process.env.AIHUB_SHELL_PATH || '';
+    const q = (s) => s.replace(/'/g, "''");
+    // 앱을 닫고 설치 파일(/S)로 바꾼 뒤 앱을 다시 켠다. 기록은 hub.log 에.
+    const ps = [
+      "$ErrorActionPreference = 'SilentlyContinue'",
+      `$log = '${q(hubLog)}'`,
+      'function L($t) { [IO.File]::AppendAllText($log, "[앱 업데이트] $t`r`n") }',
+      'Start-Sleep 2',
+      // 설치 파일(/S)은 앱이 켜져 있으면 바꾸지 않고 멈춘다(종료 코드 2, 윈도우 실측) → 앱을 먼저 닫는다
+      'Get-Process aixschool-hub -ErrorAction SilentlyContinue | Stop-Process -Force',
+      'for ($i = 0; $i -lt 20 -and (Get-Process aixschool-hub -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Milliseconds 500 }',
+      `$p = Start-Process '${q(setup)}' -ArgumentList '/S' -PassThru -Wait`,
+      'L "설치 파일 끝(코드 $($p.ExitCode))"',
+      'Start-Sleep 2',
+      // 업데이트용 환경 값을 새 앱에 물려주지 않는다(새 앱은 보통 켤 때와 똑같이 시작)
+      "'AIHUB_IDLE_EXIT', 'AIHUB_APP_PID', 'AIHUB_SHELL_VERSION', 'AIHUB_SHELL_PATH', 'AIHUB_SHELL_BUNDLE' | % { Remove-Item \"Env:$_\" -ErrorAction SilentlyContinue }",
+      "if (-not (Get-Process aixschool-hub -ErrorAction SilentlyContinue)) {",
+      `  $exe = '${q(known)}'`,
+      `  if (-not $exe -or -not (Test-Path $exe)) { $exe = Join-Path $env:LOCALAPPDATA '${APP_DIR_NAME}\\aixschool-hub.exe' }`,
+      "  if (-not (Test-Path $exe)) { $exe = (Get-ChildItem $env:LOCALAPPDATA -Recurse -Filter 'aixschool-hub.exe' -ErrorAction SilentlyContinue | Select-Object -First 1).FullName }",
+      '  if ($exe) { Start-Process $exe; L "앱 다시 켬" } else { L "앱 실행 파일을 못 찾음" }',
+      '}',
+    ].join('\r\n');
+    const ps1 = path.join(work, 'shell-install.ps1');
+    fs.writeFileSync(ps1, '﻿' + ps, 'utf8');
+    // detached 로 띄우면 PowerShell이 아무것도 안 하고 바로 끝난다(윈도우 실측). 윈도우는 서버가 꺼져도 자식이 남으므로 분리하지 않는다
+    spawn('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', ps1], { stdio: 'ignore', windowsHide: true }).on('error', (e) => log(`[앱 업데이트] 설치 스크립트를 못 띄움 ${e.message}`)).unref();
+    log('[앱 업데이트] 설치 파일 실행(앱이 잠깐 닫혔다 다시 열림)');
+    return 'started';
+  }
+  // 맥: .app 을 바꿔 넣고 앱을 다시 켠다
+  const app = path.join(inst, `${APP_DIR_NAME}.app`);
+  if (!fs.existsSync(app)) throw new Error('묶음에 앱이 없음');
+  const fromEnv = (process.env.AIHUB_SHELL_PATH || '').match(/^(.*\.app)\/Contents\/MacOS\//)?.[1];
+  const target = [fromEnv, path.join(process.env.HOME || '', 'Applications', `${APP_DIR_NAME}.app`), `/Applications/${APP_DIR_NAME}.app`].find((p) => p && fs.existsSync(p));
+  if (!target) throw new Error('설치된 앱 위치를 못 찾음');
+  const sh = path.join(work, 'shell-install.sh');
+  const Q = (s) => `'${s.replace(/'/g, `'\\''`)}'`;
+  fs.writeFileSync(sh, [
+    '#!/bin/sh',
+    `L() { echo "[앱 업데이트] $1" >> ${Q(hubLog)}; }`,
+    `T=${Q(target)}; N=${Q(app)}`,
+    'sleep 2',
+    'xattr -dr com.apple.quarantine "$N" 2>/dev/null',
+    'pkill -x aixschool-hub; for i in 1 2 3 4 5 6 7 8 9 10; do pgrep -x aixschool-hub >/dev/null || break; sleep 1; done',
+    'rm -rf "$T.old"; if mv "$T" "$T.old" && ditto "$N" "$T"; then rm -rf "$T.old"; L "앱 바꿈"; else rm -rf "$T"; mv "$T.old" "$T"; L "앱 바꾸기 실패, 원래 앱 그대로"; fi',
+    '[ -n "$AIHUB_SHELL_NO_OPEN" ] || open "$T"',
+  ].join('\n'));
+  fs.chmodSync(sh, 0o755);
+  spawn('/bin/sh', [sh], { detached: true, stdio: 'ignore' }).unref();
+  log('[앱 업데이트] 앱 바꾸는 중(앱이 잠깐 닫혔다 다시 열림)');
+  return 'started';
 }

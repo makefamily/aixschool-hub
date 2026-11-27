@@ -1001,5 +1001,7 @@ server.on('error', (e) => {
 });
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`[AI 학교 허브] v${upd.currentVersion()} 실행 · http://127.0.0.1:${PORT} · 허브 폴더 ${hubHome()} · pid ${process.pid}`);
+  // 업데이트로 다시 켜진 서버: 앱 껍데기가 이 판보다 낮으면 같은 판 묶음으로 껍데기도 바꾼다(판마다 한 번)
+  if (process.env.AIHUB_IDLE_EXIT && !process.env.AIHUB_NO_SHELL_UPDATE) setTimeout(() => upd.shellUpdate((t) => console.log(t)).then((r) => { if (r !== 'started') console.log(`[앱 업데이트] 건너뜀(${r})`); }).catch((e) => console.error('[앱 업데이트] 실패(허브는 그대로 씀)', e.message)), 4000);
   try { const pc = pcCheck(); console.log(`[이 PC] 사용자 폴더 ${pc.home}${pc.oddHome ? ' (띄어쓰기·한글 있음 → AI를 직접 실행)' : ''} · Claude ${pc.claude.how} ${pc.claude.path} · Codex ${pc.codex.how}`); } catch {}
 });
